@@ -17,6 +17,10 @@ server-side quota enforcement and a place to plug payments in later.
 > Indicative estimates only. Not legal or customs advice. Confirm every rate on
 > ICEGATE before filing a Bill of Entry.
 
+**Live:** <https://india-customs-duty.pages.dev> — the custom domain
+`customs.vijayebhava.com` is attached in Cloudflare Pages and is waiting for its
+DNS record.
+
 ## What it does
 
 1. **HSN search** — by 4–8 digit code or product description, keyboard friendly.
