@@ -37,7 +37,7 @@ server-side quota enforcement and a place to plug payments in later.
 ### Static site (what ships)
 
 ```bash
-cd customs-app
+cd customs-calc
 npm run serve          # python3 -m http.server 8080 --directory web
 # open http://localhost:8080
 ```
@@ -64,7 +64,7 @@ first start and is gitignored.
 ## Repository layout
 
 ```
-customs-app/
+customs-calc/
 ├── web/                     deployable static site
 │   ├── index.html
 │   ├── 404.html
@@ -189,6 +189,18 @@ The site is plain static files, so Cloudflare Pages can serve `web/` directly.
 FastAPI cannot run on Pages; deploy it separately (Render, Railway, Fly.io) if
 you need server-side quota.
 
+This repository is already deployed to the private Pages project
+`india-customs-duty` by direct upload. After changing the site:
+
+```bash
+npx wrangler pages deploy web --project-name india-customs-duty --branch main
+```
+
+Direct upload does not redeploy on `git push`. To deploy on every push, connect
+the repository in the Pages dashboard (private repos need the Cloudflare GitHub
+app) or add a GitHub Actions step that runs the command above with
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets.
+
 ### Dashboard
 
 1. Push this repository to GitHub.
@@ -218,10 +230,10 @@ cache, and make sure npm is not configured with `omit=optional`.
 
 Preferred URL: **https://customs.vijayebhava.com**
 
-- If `vijayebhava.com` uses Cloudflare DNS, adding the custom domain in Pages
-  creates the proxied `CNAME` automatically.
-- Otherwise create a `CNAME` record at your DNS host:
-  `customs` → `india-customs-duty.pages.dev`.
+- If `vijayebhava.com` is on Cloudflare DNS, add a proxied CNAME under
+  **DNS → Records**: `customs` → `india-customs-duty.pages.dev`. Pages verifies
+  it and issues the certificate automatically.
+- Otherwise create the same CNAME at your DNS host.
 
 ### Why not `vijayebhava.com/customs/`?
 
