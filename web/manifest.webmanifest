@@ -1,0 +1,19 @@
+{
+  "name": "CustomsCalc — India import duty calculator",
+  "short_name": "CustomsCalc",
+  "description": "Look up BCD and IGST by HSN code and calculate India import landed cost with FTA preferential rates.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7fa",
+  "theme_color": "#0b1f3a",
+  "lang": "en-IN",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

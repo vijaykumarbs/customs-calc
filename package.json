@@ -1,0 +1,17 @@
+{
+  "name": "customscalc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "India import duty and landed-cost calculator built on the BCD/FTA master data.",
+  "scripts": {
+    "serve": "python3 -m http.server 8080 --directory web",
+    "test": "node --test tests/duty.test.mjs",
+    "test:python": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "vectors": "node scripts/generate_vectors.mjs",
+    "export": "python3 scripts/export_data.py"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
