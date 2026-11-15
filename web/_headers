@@ -11,11 +11,20 @@
 /assets/*
   Cache-Control: public, max-age=0, must-revalidate
 
+/index.html
+  Cache-Control: no-store
+
+/
+  Cache-Control: no-store
+
+/privacy/*
+  Cache-Control: no-store
+
+/terms/*
+  Cache-Control: no-store
+
 /api-docs/
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-store
 
 /api-docs/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/index.html
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-store

@@ -16,7 +16,7 @@
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/assets/styles.css?v=3">
+  <link rel="stylesheet" href="/assets/styles.css?v=4">
 </head>
 <body class="docs-body">
   <a class="skip-link" href="#get-key">Skip to API key signup</a>
@@ -160,7 +160,7 @@ X-API-Key: cc_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
               <tbody>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/hsn/{code}</code></td><td>1 call</td><td>Rate stack and preferential rates for an 8-digit code</td></tr>
                 <tr><td><span class="method post">POST</span></td><td><code>/api/v1/calculate</code></td><td>1 call</td><td>Landed cost for one HSN and customs value build-up</td></tr>
-                <tr><td><span class="method post">POST</span></td><td><code>/api/v1/calculate/batch</code></td><td>1 call / line</td><td>Up to 20 lines in one request</td></tr>
+                <tr><td><span class="method post">POST</span></td><td><code>/api/v1/calculate/batch</code></td><td>1 call / line</td><td>Up to 10 lines on a free key, 20 on a paid key</td></tr>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/search?q=</code></td><td>Free</td><td>Code + description only, no rates</td></tr>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/meta</code></td><td>Free</td><td>Dataset version, agreements and countries</td></tr>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/usage</code></td><td>Free</td><td>Current month's usage and reset date</td></tr>
@@ -244,6 +244,9 @@ X-API-Key: cc_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
             amounts that are includible in the customs value (freight to India,
             marine insurance, landing, packing, commissions, etc.). BCD, SWS,
             AIDC, cess and IGST are then applied to the resulting assessable value.
+            All API amounts are in Indian rupees. The website accepts a foreign
+            invoice currency and converts it with the exchange rate you enter;
+            the API does not fetch or apply FX rates.
           </p>
           <p>
             The legacy <code>cif</code> field is still accepted and is treated as
@@ -363,7 +366,7 @@ print(data["valuation"]["assessableValue"], data["amounts"]["landedCost"])</code
 
         <section id="batch" class="docs-section">
           <p class="eyebrow">POST /api/v1/calculate/batch</p>
-          <h2>Up to 20 lines in one call</h2>
+          <h2>Up to 10 lines on a free key, 20 on a paid key</h2>
           <p>
             Send an <code>items</code> array with the same fields as a single
             calculation. Each line is validated first; the whole batch is rejected
@@ -395,7 +398,7 @@ print(data["valuation"]["assessableValue"], data["amounts"]["landedCost"])</code
   "meta": { "indicative": true }
 }</code></pre>
           </div>
-          <p class="docs-fine">Batch limit: 20 items. The request body must stay under 8 KB.</p>
+          <p class="docs-fine">Batch limit: 10 items on a free key, 20 on a paid key. The request body must stay under 8 KB.</p>
         </section>
 
         <section id="search" class="docs-section">
@@ -572,6 +575,6 @@ print(data["valuation"]["assessableValue"], data["amounts"]["landedCost"])</code
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/assets/docs.js?v=3"></script>
+  <script type="module" src="/assets/docs.js?v=4"></script>
 </body>
 </html>

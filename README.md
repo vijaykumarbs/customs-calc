@@ -84,13 +84,14 @@ customs-app/
 │   ├── schema.sql             D1 schema (idempotent)
 │   └── seed.sql               generated tariff + settings insert
 ├── data-source/               source workbook, CSV and provenance notes
-├── backend/                   optional local FastAPI/SQLite service
+├── backend/                   legacy local FastAPI reference (not deployed)
 ├── scripts/
 │   ├── export_data.py         rebuild data/*.json from the workbook
 │   ├── build_seed.mjs         generate data/seed.sql
 │   └── generate_vectors.mjs   regenerate parity vectors
 ├── tests/
 │   ├── duty.test.mjs          Node duty + search tests
+│   ├── worker.test.mjs        Worker auth, quota, batch, admin and search tests
 │   ├── test_duty.py           Python parity tests
 │   └── vectors.json
 ├── package.json
@@ -209,7 +210,7 @@ The plaintext key is returned once and stored only as a SHA-256 hash. Send it as
 |---|---|---|---|
 | `GET` | `/api/v1/hsn/{code}` | 1 call | Rate stack and preferential rates |
 | `POST` | `/api/v1/calculate` | 1 call | Landed cost |
-| `POST` | `/api/v1/calculate/batch` | 1 call / line | Up to 20 lines in one request |
+| `POST` | `/api/v1/calculate/batch` | 1 call / line | Up to 10 lines on a free key, 20 on a paid key |
 | `GET` | `/api/v1/search?q=` | Free | Code + description only |
 | `GET` | `/api/v1/meta` | Free | Dataset metadata |
 | `GET` | `/api/v1/usage` | Free | Monthly usage and reset date |
@@ -324,15 +325,18 @@ remains a placeholder; the pricing modal stores emails in D1 through
 ## Tests
 
 ```bash
-npm test                     # Node duty + search tests
+npm test                     # duty engine + production Worker tests
 python -m unittest discover -s tests -p "test_*.py"
 
 # after changing rate logic or data
 node scripts/generate_vectors.mjs
 ```
 
-The Node suite reads `data/hsn.json` and `data/fta.json` directly. Worker
-behaviour is exercised against local D1 with `wrangler pages dev`.
+`tests/worker.test.mjs` imports the production Worker and runs it against an
+in-memory SQLite database behind a small D1-compatible adapter. It covers API
+auth, monthly quota, batch atomicity, admin rotation, site quota, search
+matching, retention cleanup and error handling. It needs Node 22.5 or newer for
+the built-in `node:sqlite` module; CI uses Node 24.
 
 ## Deploy to Cloudflare Pages
 

@@ -55,6 +55,23 @@ const BASE_META = {
 let metaCache = null;
 let metaCacheAt = 0;
 
+// Chapters where DGTR/CBIC anti-dumping, countervailing or safeguard measures
+// are commonly in force. This is a warning, not a calculation: the actual
+// measure depends on the exporter, producer and notification date.
+const AD_RISK_CHAPTERS = new Set([28, 29, 32, 38, 39, 40, 48, 69, 70, 72, 73, 76, 84, 85, 87]);
+
+function tradeRemedyWarnings(chapter) {
+  if (!AD_RISK_CHAPTERS.has(Number(chapter))) return [];
+  return [
+    {
+      code: "anti_dumping_may_apply",
+      message:
+        "Anti-dumping, countervailing or safeguard duty may apply to some lines in this chapter. It is notified case by case and is not included in this estimate.",
+      action: "Check the current DGTR/CBIC notification before filing.",
+    },
+  ];
+}
+
 class ApiError extends Error {
   constructor(status, code, message, extra = {}) {
     super(message);
@@ -128,6 +145,15 @@ async function sha256Hex(value) {
   return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function constantTimeEqual(left, right) {
+  const [a, b] = await Promise.all([sha256Hex(left), sha256Hex(right)]);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
 }
 
 function base64url(bytes) {
@@ -216,8 +242,19 @@ function parseLimit(value, fallback = 12) {
 }
 
 function normaliseEmail(value) {
-  const email = String(value || "").trim().toLowerCase();
-  if (email.length > 254 || !EMAIL_RE.test(email)) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw.length > 254 || !EMAIL_RE.test(raw)) {
+    throw new ApiError(400, "invalid_email", "Enter a valid email address.");
+  }
+  // Treat plus-addressed aliases as the same account, so dev+2@example.com
+  // cannot be used to mint extra free keys.
+  const at = raw.lastIndexOf("@");
+  if (at <= 0) {
+    throw new ApiError(400, "invalid_email", "Enter a valid email address.");
+  }
+  const local = raw.slice(0, at).replace(/\+.*$/, "");
+  const email = `${local}@${raw.slice(at + 1)}`;
+  if (!local || !EMAIL_RE.test(email)) {
     throw new ApiError(400, "invalid_email", "Enter a valid email address.");
   }
   return email;
@@ -264,6 +301,13 @@ function valuationFromBody(body) {
         400,
         "missing_goods_value",
         "Send goodsValue (invoice value) together with freight, insurance or otherCharges.",
+      );
+    }
+    if (body.cif === undefined || body.cif === null || body.cif === "") {
+      throw new ApiError(
+        400,
+        "missing_value",
+        "Send hsn and goodsValue (invoice value), or a cif assessable value.",
       );
     }
     const cif = parseCif(body.cif);
@@ -342,7 +386,12 @@ async function bumpRateLimit(env, bucket, limit, windowSeconds, now = Date.now()
     return Boolean(row && row.count <= limit);
   } catch (err) {
     console.error("rate limit failed", err);
-    return true;
+    // Fail closed. A database problem must not turn a limiter into a no-op.
+    throw new ApiError(
+      503,
+      "rate_limit_unavailable",
+      "We could not verify rate limits. Try again in a moment.",
+    );
   }
 }
 
@@ -353,6 +402,35 @@ async function enforceRateLimit(env, bucket, limit, windowSeconds, message) {
       retryAfterSeconds: windowSeconds,
     });
   }
+}
+
+/**
+ * Delete rows that are no longer needed for quota or abuse checks.
+ *
+ * Pages Functions have no cron trigger, so the Worker calls this at most once
+ * an hour per isolate from `waitUntil`. It is exported so the tests can run it
+ * deterministically.
+ */
+export async function cleanupExpired(env, now = Date.now()) {
+  const dayCutoff = istDayKey(now - 400 * 86400000);
+  const monthCutoff = istMonthKey(now - 400 * 86400000);
+  const signupCutoff = new Date(now - 365 * 86400000).toISOString();
+  await Promise.all([
+    env.DB.prepare("DELETE FROM rate_limits WHERE expires_at <= ?").bind(now).run(),
+    env.DB.prepare("DELETE FROM site_usage WHERE day < ?").bind(dayCutoff).run(),
+    env.DB.prepare("DELETE FROM api_usage WHERE period < ?").bind(monthCutoff).run(),
+    env.DB.prepare("DELETE FROM signup_log WHERE created_at < ?").bind(signupCutoff).run(),
+  ]);
+}
+
+let lastCleanupAt = 0;
+
+function scheduleCleanup(env, ctx) {
+  if (!ctx?.waitUntil || Date.now() - lastCleanupAt < 3600000) return;
+  lastCleanupAt = Date.now();
+  ctx.waitUntil(
+    cleanupExpired(env).catch((err) => console.error("cleanup failed", err)),
+  );
 }
 
 /* -------------------------------------------------------------- settings --- */
@@ -436,12 +514,16 @@ async function findHsn(env, code) {
 
 async function search(env, query, limit) {
   const q = cleanQuery(query);
-  const lower = q.toLowerCase();
-  const digits = q.replace(/\D/g, "");
-  const tokens = lower
+  const terms = q
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
     .split(" ")
-    .filter((t) => t.length > 1)
-    .slice(0, 4);
+    .filter(Boolean);
+  // Single-letter words such as the "t" in "t-shirt" are noise for matching,
+  // but keep them when the query consists only of such words.
+  const words = terms.filter((t) => /[a-z]/.test(t) && t.length > 1).slice(0, 4);
+  const digits = terms.filter((t) => /^\d+$/.test(t)).join("");
 
   const clauses = [];
   const params = [];
@@ -450,27 +532,36 @@ async function search(env, query, limit) {
     clauses.push("code LIKE ? ESCAPE '\\'");
     params.push(`${escapeLike(digits)}%`);
   }
-  clauses.push("lower(description) LIKE ? ESCAPE '\\'");
-  params.push(`%${escapeLike(lower)}%`);
-
-  let sql = `SELECT code, description FROM hsn WHERE (${clauses.join(" OR ")})`;
-  if (tokens.length > 1) {
-    sql += ` AND (${tokens
-      .map(() => "lower(description) LIKE ? ESCAPE '\\'")
-      .join(" AND ")})`;
-    for (const token of tokens) params.push(`%${escapeLike(token)}%`);
+  for (const word of words) {
+    // The leading space anchors the match to the start of a word, so "tea"
+    // does not match "steaming" and "gold" does not match "mangolds". A
+    // trailing wildcard still lets "shirt" match "shirts".
+    clauses.push("search_text LIKE ? ESCAPE '\\'");
+    params.push(`% ${escapeLike(word)}%`);
   }
 
-  sql += ` ORDER BY
-    CASE
-      WHEN code = ? THEN 0
-      WHEN code LIKE ? ESCAPE '\\' THEN 1
-      WHEN lower(description) LIKE ? ESCAPE '\\' THEN 2
-      ELSE 3
-    END,
-    length(code), code
+  if (clauses.length === 0) {
+    throw new ApiError(400, "invalid_query", "Enter a product name or an HSN code.");
+  }
+
+  const phrase = terms.join(" ");
+  let sql = `SELECT code, description FROM hsn
+    WHERE (${clauses.join(" AND ")})
+    ORDER BY
+      CASE
+        WHEN code = ? THEN 0
+        WHEN code LIKE ? ESCAPE '\\' THEN 1
+        WHEN search_text LIKE ? ESCAPE '\\' THEN 2
+        ELSE 3
+      END,
+      length(code), code
     LIMIT ?`;
-  params.push(digits, `${escapeLike(digits)}%`, `%${escapeLike(lower)}%`, limit);
+  params.push(
+    digits,
+    digits ? `${escapeLike(digits)}%` : "\u0000",
+    `% ${escapeLike(phrase)} %`,
+    limit,
+  );
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return results || [];
@@ -678,7 +769,7 @@ async function reserveSiteQuota(env, clientId, meta) {
     throw new ApiError(
       429,
       "site_quota_exceeded",
-      "Today's five free calculations are used. The unlimited plan is launching soon.",
+      "Today's five free calculations are used. The paid plan is not open for payment yet — join the waitlist.",
       { limit, day, upgrade: "https://customs.vijayebhava.com/#pricing" },
     );
   }
@@ -722,8 +813,16 @@ async function adminAuth(request, env) {
   if (!token || token.length < 16) {
     throw new ApiError(503, "admin_disabled", "Admin operations are not configured.");
   }
+  const ip = await ipHash(request);
+  await enforceRateLimit(
+    env,
+    `admin-auth:${ip}`,
+    20,
+    900,
+    "Too many admin authentication attempts. Try again later.",
+  );
   const supplied = request.headers.get("x-admin-token") || "";
-  if (supplied.length !== token.length || supplied !== token) {
+  if (!(await constantTimeEqual(supplied, token))) {
     throw new ApiError(401, "invalid_admin_token", "Admin token missing or invalid.");
   }
 }
@@ -745,6 +844,7 @@ async function handleV1(request, env, url, ctx) {
         "GET /api/v1/search?q=",
         "GET /api/v1/hsn/{code}",
         "POST /api/v1/calculate",
+        "POST /api/v1/calculate/batch",
         "GET /api/v1/usage",
         "POST /api/v1/signup",
       ],
@@ -856,6 +956,8 @@ async function hsnLookup(env, meta, key, code) {
       preferentialRates: { MFN: record.bcd_effective, ...preferentialMap(meta, rates) },
       flag: record.flag,
       flagLabel: flagLabel(record.flag),
+      antiDumpingMayApply: tradeRemedyWarnings(record.chapter).length > 0,
+      warnings: tradeRemedyWarnings(record.chapter),
       quota,
     },
     meta: {
@@ -905,6 +1007,8 @@ function buildQuoteData(result, origin, valuation, quota, meta) {
     mfnLandedCost: result.mfnLandedCost,
     flag: result.flag,
     flagLabel: result.flagLabel,
+    antiDumpingMayApply: tradeRemedyWarnings(result.chapter).length > 0,
+    warnings: tradeRemedyWarnings(result.chapter),
     quota,
   };
 }
@@ -917,13 +1021,13 @@ async function calculate(request, env, meta, key) {
   const { record, row, rates } = await findHsn(env, code);
   const ftaRate = ftaRateFor(meta, origin, rates);
 
-  const quota = await reserveApiQuota(env, key, meta);
   let result;
   try {
     result = computeDuty({ cif: valuation.assessableValue, row, ftaRate });
   } catch (err) {
     throw new ApiError(400, "calculation_failed", err.message || "Could not calculate duty.");
   }
+  const quota = await reserveApiQuota(env, key, meta);
 
   return apiJson({
     data: buildQuoteData(result, origin, valuation, quota, meta),
@@ -938,11 +1042,13 @@ async function calculate(request, env, meta, key) {
 async function calculateBatch(request, env, meta, key) {
   const body = await readJsonBody(request);
   const items = Array.isArray(body.items) ? body.items : [];
-  if (items.length === 0 || items.length > 20) {
+  const maxBatch = key.plan === "paid" ? 20 : 10;
+  if (items.length === 0 || items.length > maxBatch) {
     throw new ApiError(
       400,
       "invalid_batch",
-      "Send between 1 and 20 line items in the items array.",
+      `Send between 1 and ${maxBatch} line items in the items array.`,
+      { maxBatch, plan: key.plan },
     );
   }
 
@@ -976,9 +1082,13 @@ async function calculateBatch(request, env, meta, key) {
     }
   }
 
-  const quota = await reserveApiQuotaCount(env, key, meta, resolved.length);
-  const results = resolved.map(({ valuation, origin, row, ftaRate }) => {
+  const computed = resolved.map(({ valuation, origin, row, ftaRate }) => {
     const result = computeDuty({ cif: valuation.assessableValue, row, ftaRate });
+    return { valuation, origin, result };
+  });
+
+  const quota = await reserveApiQuotaCount(env, key, meta, computed.length);
+  const results = computed.map(({ valuation, origin, result }) => {
     const data = buildQuoteData(result, origin, valuation, quota, meta);
     delete data.quota;
     return data;
@@ -1075,6 +1185,7 @@ async function handleSite(request, env, url) {
   }
 
   if (url.pathname === "/api/site/search" && request.method === "GET") {
+    const query = cleanQuery(url.searchParams.get("q"));
     const ip = await ipHash(request);
     await enforceRateLimit(
       env,
@@ -1092,12 +1203,12 @@ async function handleSite(request, env, url) {
     );
     const results = await search(
       env,
-      cleanQuery(url.searchParams.get("q")),
+      query,
       parseLimit(url.searchParams.get("limit")),
     );
     return siteJson(
       {
-        data: { query: url.searchParams.get("q"), results },
+        data: { query, results },
         meta: { count: results.length },
       },
       200,
@@ -1124,21 +1235,11 @@ async function handleSite(request, env, url) {
   }
 
   if (url.pathname === "/api/site/quote" && request.method === "POST") {
-    const ip = await ipHash(request);
-    await enforceRateLimit(
-      env,
-      `site-quote-ip:${ip}`,
-      SITE_IP_DAILY_LIMIT,
-      86400,
-      "Too many calculations from this connection today.",
-    );
-
     const body = await readJsonBody(request);
     const valuation = valuationFromBody(body);
     const origin = resolveOrigin(meta, body.country);
     const { record, row, rates } = await findHsn(env, body.hsn);
     const ftaRate = ftaRateFor(meta, origin, rates);
-    const quota = await reserveSiteQuota(env, client.id, meta);
 
     let result;
     try {
@@ -1146,6 +1247,21 @@ async function handleSite(request, env, url) {
     } catch (err) {
       throw new ApiError(400, "calculation_failed", err.message || "Could not calculate duty.");
     }
+
+    // A new cookie gets a fresh five-calculation allowance, so count only new
+    // cookies against the per-IP backstop. Offices and CHA teams that keep a
+    // cookie are not charged for colleagues sharing the same connection.
+    if (client.fresh) {
+      const ip = await ipHash(request);
+      await enforceRateLimit(
+        env,
+        `site-quote-ip:${ip}`,
+        SITE_IP_DAILY_LIMIT,
+        86400,
+        "Too many new calculation sessions from this connection today.",
+      );
+    }
+    const quota = await reserveSiteQuota(env, client.id, meta);
 
     return siteJson(
       { data: buildQuoteData(result, origin, valuation, quota, meta) },
@@ -1351,6 +1467,8 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    if (path.startsWith("/api/")) scheduleCleanup(env, ctx);
+
     try {
       if (path === "/api/health") {
         return json({
@@ -1376,15 +1494,24 @@ export default {
       if (path.startsWith("/api/v1/")) return apiError(err);
       if (path.startsWith("/api/admin/")) {
         const status = err instanceof ApiError ? err.status : 500;
+        if (status >= 500) console.error("Admin error", err);
         return json(
-          errorBody(err instanceof ApiError ? err.code : "internal_error", err.message),
+          errorBody(
+            err instanceof ApiError ? err.code : "internal_error",
+            err instanceof ApiError ? err.message : "Something went wrong. Try again.",
+          ),
           status,
         );
       }
       if (path.startsWith("/api/site/")) {
         const status = err instanceof ApiError ? err.status : 500;
+        if (status >= 500) console.error("Site error", err);
         return json(
-          errorBody(err instanceof ApiError ? err.code : "internal_error", err.message, err.extra || {}),
+          errorBody(
+            err instanceof ApiError ? err.code : "internal_error",
+            err instanceof ApiError ? err.message : "Something went wrong. Try again.",
+            err instanceof ApiError ? err.extra || {} : {},
+          ),
           status,
         );
       }

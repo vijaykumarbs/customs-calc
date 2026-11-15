@@ -9,12 +9,13 @@
     "seed": "node scripts/build_seed.mjs",
     "db:local": "wrangler d1 execute customs-calc --local --file=data/schema.sql && wrangler d1 execute customs-calc --local --file=data/seed.sql",
     "db:remote": "wrangler d1 execute customs-calc --remote --file=data/schema.sql && wrangler d1 execute customs-calc --remote --file=data/seed.sql",
-    "test": "node --test tests/duty.test.mjs",
+    "test": "node --test tests/duty.test.mjs tests/worker.test.mjs",
+    "test:worker": "node --test tests/worker.test.mjs",
     "test:python": "python3 -m unittest discover -s tests -p 'test_*.py'",
     "vectors": "node scripts/generate_vectors.mjs",
     "export": "python3 scripts/export_data.py"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.5"
   }
 }

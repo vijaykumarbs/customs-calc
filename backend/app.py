@@ -1,4 +1,9 @@
-"""Optional FastAPI backend for CustomsCalc.
+"""Legacy FastAPI reference implementation — not deployed and not supported.
+
+Production is the Cloudflare Pages Worker in ``web/_worker.js`` with D1. This
+module is kept only as a local reference and for parity checks; its ``/api/*``
+surface is not the public ``/api/v1/*`` API and it should not be used in
+production.
 
 The public app is served from ``web/`` by a Cloudflare Pages Worker in
 production. This optional FastAPI service is a local reference implementation:

@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy policy — CustomsCalc</title>
-  <meta name="description" content="How CustomsCalc handles anonymous cookies, calculation logs, API keys and waitlist email addresses.">
+  <meta name="description" content="How CustomsCalc handles anonymous cookies, quota counters, API keys and waitlist email addresses.">
   <meta name="theme-color" content="#0b1f3a">
   <meta name="robots" content="index,follow">
   <link rel="canonical" href="https://customs.vijayebhava.com/privacy/">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/styles.css?v=3">
+  <link rel="stylesheet" href="/assets/styles.css?v=4">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -57,9 +57,10 @@
           the application database.
         </li>
         <li>
-          <strong>Calculation records.</strong> For quota and abuse prevention we store the
-          anonymous client identifier, HSN code, origin, assessable value, total duty, and a
-          timestamp. These records are not linked to a name.
+          <strong>Quota counters.</strong> The website stores only a per-day counter against the
+          anonymous client identifier. We do not store the HSN code, origin, value or duty result
+          of your calculations. API usage is stored as a monthly call count against the API key;
+          the request bodies are not retained.
         </li>
         <li>
           <strong>Email addresses.</strong> If you join the paid-plan waitlist or create an API
@@ -101,11 +102,25 @@
 
       <h2>Retention</h2>
       <ul>
-        <li>Anonymous quota counters: retained for the current and recent quota periods.</li>
-        <li>Calculation records: retained for up to 12 months for abuse review, then deleted.</li>
+        <li>Anonymous daily quota counters: retained for up to 400 days, then deleted.</li>
+        <li>API monthly usage counters: retained for up to 13 months, then deleted.</li>
+        <li>Abuse rate-limit buckets: retained only until their window expires (at most 24 hours for daily limits).</li>
+        <li>Signup log: retained for up to 12 months, then deleted.</li>
         <li>Waitlist and API account emails: retained until you ask us to delete them or the account is closed.</li>
         <li>Hashed API keys: retained until revoked.</li>
       </ul>
+      <p>
+        A scheduled cleanup runs from the application Worker at least hourly and removes rows past
+        these periods. We do not keep a per-calculation history.
+      </p>
+
+      <h2>Where data is processed</h2>
+      <p>
+        The service runs on Cloudflare's global network, and Cloudflare D1 stores the database in
+        the region Cloudflare selects for the account. Cloudflare may process and transfer data
+        outside India as part of providing hosting, security and database services. By using the
+        service you consent to that transfer. We do not operate a separate data centre.
+      </p>
 
       <h2>Your choices</h2>
       <p>
@@ -129,10 +144,11 @@
         by email where we have an address.
       </p>
 
-      <h2>Contact</h2>
+      <h2>Contact and grievance</h2>
       <p>
-        Privacy questions: <a href="mailto:privacy@vijayebhava.com">privacy@vijayebhava.com</a>.
-        General and API questions: <a href="/api-docs/">the API documentation</a>.
+        Privacy questions and grievances: <a href="mailto:privacy@vijayebhava.com">privacy@vijayebhava.com</a>.
+        Include “grievance” in the subject line. We aim to acknowledge privacy requests within
+        seven working days. General and API questions: <a href="/api-docs/">the API documentation</a>.
       </p>
     </div>
   </main>

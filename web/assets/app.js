@@ -29,6 +29,16 @@ const state = {
 
 const pct = (n) => `${Number(Number(n).toFixed(2))}%`;
 const plainNumber = (n) => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
+const CURRENCY_SYMBOLS = {
+  INR: "₹",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  AED: "د.إ",
+  JPY: "¥",
+  CNY: "¥",
+  SGD: "S$",
+};
 
 const AGREEMENT_LABELS = {
   AIFTA: "ASEAN–India FTA",
@@ -86,6 +96,13 @@ function updateUrl() {
   const params = new URLSearchParams();
   if (state.selected) params.set("hsn", state.selected.code);
   if ($("country").value) params.set("country", $("country").value);
+  const currency = $("currency").value;
+  if (currency !== "INR") {
+    params.set("currency", currency);
+    const fx = parseAmount($("fxRate").value);
+    if (Number.isFinite(fx) && fx > 0) params.set("fx", String(fx));
+  }
+  if (!$("landingCharge").checked) params.set("landing", "0");
   const goods = parseAmount($("goodsValue").value);
   if (Number.isFinite(goods) && goods > 0) params.set("value", String(Math.round(goods)));
   for (const [id, key] of [["freight", "freight"], ["insurance", "insurance"], ["otherCharges", "charges"]]) {
@@ -366,6 +383,7 @@ function renderResult(r, origin) {
       ${row("Freight to India", "—", valuation.freight)}
       ${row("Insurance", "—", valuation.insurance)}
       ${row("Other includible charges", "—", valuation.otherCharges)}
+      ${valuation.landingCharge ? row("of which: 1% landing charge", "—", valuation.landingCharge, { note: "included in other charges" }) : ""}
       ${row("Assessable value (CIF)", "—", r.cif, { strong: true })}
       ${row("Basic customs duty (BCD)", pct(r.appliedBcdRate), r.bcd, {
         note: r.bcdStatutory !== r.bcdEffective
@@ -398,7 +416,7 @@ function renderResult(r, origin) {
     <button class="btn btn-ghost btn-sm" type="button" id="printBtn">Print / save PDF</button>
     <a class="btn btn-ghost btn-sm" href="#calculator" id="recalcLink">Change shipment</a>
   </div>
-  <p class="result-fine">Indicative only. Assessable value build-up uses invoice value plus freight, insurance and other includible charges. Anti-dumping, safeguard, TRQ, specific duties and origin verification are excluded. Confirm on ICEGATE before filing.${r.dataAsOf ? ` Tariff data as on ${escapeHtml(r.dataAsOf)}.` : ""}</p>`);
+  <p class="result-fine">Indicative only. Assessable value build-up uses invoice value plus freight, insurance and other includible charges.${valuation.currency && valuation.currency !== "INR" ? ` Converted at 1 ${escapeHtml(valuation.currency)} = ₹${escapeHtml(String(valuation.exchangeRate))}.` : ""} Anti-dumping, safeguard, TRQ, specific duties and origin verification are excluded. Confirm on ICEGATE before filing.${r.dataAsOf ? ` Tariff data as on ${escapeHtml(r.dataAsOf)}.` : ""}</p>`);
 
   body.innerHTML = parts.join("");
   body.hidden = false;
@@ -424,6 +442,9 @@ async function copyBreakdown(r, origin) {
     "CustomsCalc — indicative import duty",
     `HSN ${r.hsn} · ${r.desc || r.description}`,
     `Origin: ${origin.country}${origin.agreement !== "MFN" ? ` (${agreementLabel})` : " (MFN)"}`,
+    valuation.currency && valuation.currency !== "INR"
+      ? `Currency: ${valuation.currency} at ₹${valuation.exchangeRate} per unit`
+      : "",
     `Invoice / FOB value: ${formatINR(valuation.goodsValue)}`,
     `Freight: ${formatINR(valuation.freight)}`,
     `Insurance: ${formatINR(valuation.insurance)}`,
@@ -465,10 +486,13 @@ function downloadCsv(r, origin) {
     ["Description", r.desc || r.description],
     ["Origin", origin.country],
     ["Agreement", origin.agreementName || origin.agreement],
+    ["Invoice currency", valuation.currency || "INR"],
+    ["Exchange rate (INR per unit)", valuation.exchangeRate || 1],
     ["Invoice / FOB value", valuation.goodsValue],
     ["Freight", valuation.freight],
     ["Insurance", valuation.insurance],
     ["Other includible charges", valuation.otherCharges],
+    ["1% landing charge included", valuation.landingCharge || 0],
     ["Assessable value (CIF)", r.cif],
     ["BCD rate %", r.appliedBcdRate],
     ["BCD", r.bcd],
@@ -505,6 +529,7 @@ function showQuotaWall() {
 /* -------------------------------------------------------------- valuation --- */
 
 function readValuation({ focus = false } = {}) {
+  const currency = $("currency")?.value || "INR";
   const goodsValue = parseAmount($("goodsValue").value);
   const freight = parseAmount($("freight").value) || 0;
   const insurance = parseAmount($("insurance").value) || 0;
@@ -512,7 +537,7 @@ function readValuation({ focus = false } = {}) {
 
   if (!Number.isFinite(goodsValue) || goodsValue <= 0) {
     if (focus) {
-      toast("Enter the invoice / FOB value in rupees.");
+      toast("Enter the invoice / FOB value.");
       $("goodsValue").focus();
     }
     return null;
@@ -521,8 +546,39 @@ function readValuation({ focus = false } = {}) {
     if (focus) toast("Freight, insurance and other charges cannot be negative.");
     return null;
   }
+
+  let exchangeRate = 1;
+  if (currency !== "INR") {
+    exchangeRate = parseAmount($("fxRate").value);
+    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+      if (focus) {
+        toast(`Enter the ${currency} to INR exchange rate.`);
+        $("fxRate").focus();
+      }
+      return null;
+    }
+  }
+
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const landingCharge = $("landingCharge")?.checked
+    ? round2((goodsValue + freight + insurance) * 0.01)
+    : 0;
+  const charges = otherCharges + landingCharge;
+
   try {
-    return computeAssessableValue({ goodsValue, freight, insurance, otherCharges });
+    const valuation = computeAssessableValue({
+      goodsValue: goodsValue * exchangeRate,
+      freight: freight * exchangeRate,
+      insurance: insurance * exchangeRate,
+      otherCharges: charges * exchangeRate,
+    });
+    return {
+      ...valuation,
+      currency,
+      exchangeRate,
+      landingCharge: round2(landingCharge * exchangeRate),
+      original: { goodsValue, freight, insurance, otherCharges, landingCharge },
+    };
   } catch (err) {
     if (focus) toast(err.message || "Check the shipment values.");
     return null;
@@ -534,9 +590,27 @@ function paintValuation() {
   const amount = $("avAmount");
   if (!valuation) {
     amount.textContent = "—";
+    $("fxRow").hidden = true;
+    $("landingRow").hidden = true;
     return;
   }
+
+  const symbol = CURRENCY_SYMBOLS[valuation.currency] || valuation.currency;
+  for (const id of ["goodsValue", "freight", "insurance", "otherCharges"]) {
+    const span = $(id).closest(".money")?.querySelector("span");
+    if (span) span.textContent = symbol;
+  }
+
   amount.textContent = formatINR(valuation.assessableValue);
+  $("fxRow").hidden = valuation.currency === "INR";
+  if (valuation.currency !== "INR") {
+    $("fxConverted").textContent =
+      `1 ${valuation.currency} = ₹${Number(valuation.exchangeRate).toLocaleString("en-IN", { maximumFractionDigits: 4 })}`;
+  }
+  $("landingRow").hidden = !valuation.landingCharge;
+  if (valuation.landingCharge) {
+    $("landingAmount").textContent = formatINR(valuation.landingCharge);
+  }
 }
 
 /* -------------------------------------------------------------- calculate --- */
@@ -603,7 +677,12 @@ async function calculate(ev) {
       desc: data.description,
       chapter: data.chapter,
       cif: data.cif,
-      valuation: data.valuation,
+      valuation: {
+        ...data.valuation,
+        currency: valuation.currency,
+        exchangeRate: valuation.exchangeRate,
+        landingCharge: valuation.landingCharge,
+      },
       bcdStatutory: data.rates.bcdStatutory,
       bcdEffective: data.rates.bcdEffective,
       appliedBcdRate: data.rates.appliedBcd,
@@ -771,7 +850,7 @@ function wireAmounts() {
     });
   });
 
-  for (const id of ["goodsValue", "freight", "insurance", "otherCharges"]) {
+  for (const id of ["goodsValue", "freight", "insurance", "otherCharges", "fxRate"]) {
     const input = $(id);
     input.addEventListener("input", () => {
       paintValuation();
@@ -783,6 +862,22 @@ function wireAmounts() {
       paintValuation();
     });
   }
+
+  $("currency").addEventListener("change", () => {
+    const isInr = $("currency").value === "INR";
+    $("fxRate").disabled = isInr;
+    if (isInr) $("fxRate").value = "1";
+    $("fxHint").textContent = isInr
+      ? "INR needs no conversion."
+      : "Enter the rate you will use for the Bill of Entry. We do not fetch live FX rates.";
+    paintValuation();
+    updateUrl();
+  });
+
+  $("landingCharge").addEventListener("change", () => {
+    paintValuation();
+    updateUrl();
+  });
 }
 
 async function applyUrlState() {
@@ -802,6 +897,14 @@ async function applyUrlState() {
   if (country && [...$("country").options].some((o) => o.value === country)) {
     $("country").value = country;
   }
+  const currency = params.get("currency");
+  if (currency && [...$("currency").options].some((o) => o.value === currency)) {
+    $("currency").value = currency;
+    $("fxRate").disabled = currency === "INR";
+    const fx = Number(params.get("fx"));
+    if (Number.isFinite(fx) && fx > 0) $("fxRate").value = String(fx);
+  }
+  if (params.get("landing") === "0") $("landingCharge").checked = false;
   const goods = Number(params.get("value") || params.get("cif"));
   if (Number.isFinite(goods) && goods > 0) $("goodsValue").value = plainNumber(goods);
   for (const [param, id] of [["freight", "freight"], ["insurance", "insurance"], ["charges", "otherCharges"]]) {

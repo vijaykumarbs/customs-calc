@@ -16,7 +16,7 @@
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="assets/styles.css?v=3">
+  <link rel="stylesheet" href="assets/styles.css?v=4">
 </head>
 <body>
   <a class="skip-link" href="#calculator">Skip to calculator</a>
@@ -121,7 +121,7 @@
                 <p class="hint">Where the goods are made, not where they ship from.</p>
               </div>
               <div>
-                <label class="field-label" for="goodsValue">Invoice / FOB value (₹)</label>
+                <label class="field-label" for="goodsValue">Invoice / FOB value</label>
                 <div class="money">
                   <span aria-hidden="true">₹</span>
                   <input id="goodsValue" class="input" type="text" inputmode="numeric" value="1,00,000" autocomplete="off">
@@ -130,23 +130,48 @@
               </div>
             </div>
 
+            <div class="field-grid">
+              <div>
+                <label class="field-label" for="currency">Invoice currency</label>
+                <select id="currency" class="input select">
+                  <option value="INR">INR — Indian rupee</option>
+                  <option value="USD">USD — US dollar</option>
+                  <option value="EUR">EUR — Euro</option>
+                  <option value="GBP">GBP — Pound sterling</option>
+                  <option value="AED">AED — UAE dirham</option>
+                  <option value="JPY">JPY — Japanese yen</option>
+                  <option value="CNY">CNY — Chinese yuan</option>
+                  <option value="SGD">SGD — Singapore dollar</option>
+                </select>
+                <p class="hint">Enter invoice, freight and insurance in this currency.</p>
+              </div>
+              <div>
+                <label class="field-label" for="fxRate">Exchange rate (₹ per unit)</label>
+                <div class="money">
+                  <span aria-hidden="true">₹</span>
+                  <input id="fxRate" class="input" type="text" inputmode="decimal" value="1" autocomplete="off" disabled>
+                </div>
+                <p class="hint" id="fxHint">INR needs no conversion. For other currencies, enter the rate you will use for the Bill of Entry.</p>
+              </div>
+            </div>
+
             <div class="field-grid field-grid-3">
               <div>
-                <label class="field-label" for="freight">Freight to India (₹)</label>
+                <label class="field-label" for="freight">Freight to India</label>
                 <div class="money">
                   <span aria-hidden="true">₹</span>
                   <input id="freight" class="input" type="text" inputmode="numeric" value="0" autocomplete="off">
                 </div>
               </div>
               <div>
-                <label class="field-label" for="insurance">Insurance (₹)</label>
+                <label class="field-label" for="insurance">Insurance</label>
                 <div class="money">
                   <span aria-hidden="true">₹</span>
                   <input id="insurance" class="input" type="text" inputmode="numeric" value="0" autocomplete="off">
                 </div>
               </div>
               <div>
-                <label class="field-label" for="otherCharges">Other charges (₹)</label>
+                <label class="field-label" for="otherCharges">Other charges</label>
                 <div class="money">
                   <span aria-hidden="true">₹</span>
                   <input id="otherCharges" class="input" type="text" inputmode="numeric" value="0" autocomplete="off">
@@ -154,11 +179,24 @@
               </div>
             </div>
             <p class="hint charges-hint">Include landing charges, packing, commissions and other costs includible in the customs value. Add only amounts that form part of the assessable value.</p>
+            <label class="check-line" for="landingCharge">
+              <input id="landingCharge" type="checkbox" checked>
+              <span>Add a 1% landing charge when the invoice does not already include it</span>
+            </label>
+            <p class="hint">Customs valuation rules allow landing charges at 1% of CIF when the actual amount is not ascertainable. Uncheck this if your other charges already include landing.</p>
 
             <div class="valuation-card" id="valuationCard">
               <div class="valuation-row">
                 <span>Assessable value (CIF)</span>
                 <strong id="avAmount">₹1,00,000</strong>
+              </div>
+              <div class="valuation-row" id="fxRow" hidden>
+                <span>Currency conversion</span>
+                <strong id="fxConverted">—</strong>
+              </div>
+              <div class="valuation-row" id="landingRow" hidden>
+                <span>1% landing charge included</span>
+                <strong id="landingAmount">—</strong>
               </div>
               <p class="hint">Invoice + freight + insurance + other charges. BCD, SWS, AIDC, cess and IGST are applied to this value.</p>
             </div>
@@ -394,6 +432,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script type="module" src="assets/app.js?v=3"></script>
+  <script type="module" src="assets/app.js?v=4"></script>
 </body>
 </html>

@@ -39,6 +39,23 @@ const sqlNumber = (value) => {
 const sqlText = (value) =>
   sqlString(String(value ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ").replace(/\r?\n/g, " "));
 
+/**
+ * Build the word index used by the Worker's search.
+ *
+ * Lowercase, replace every non-alphanumeric character with a space, collapse
+ * runs of spaces and pad both ends. A query token can then be matched as a
+ * whole word (or word prefix) with `search_text LIKE '% token%'`, which stops
+ * "tea" from matching "steaming" and "gold" from matching "mangolds".
+ */
+function searchText(description) {
+  const normalised = String(description ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+  return normalised ? ` ${normalised} ` : " ";
+}
+
 const columns = [
   "code",
   "description",
@@ -51,6 +68,7 @@ const columns = [
   "cess",
   "flag",
   "fta",
+  "search_text",
 ];
 
 const BATCH = 50;
@@ -71,7 +89,8 @@ parts.push(`CREATE TABLE hsn_stage (
   igst           REAL NOT NULL,
   cess           REAL NOT NULL,
   flag           INTEGER NOT NULL,
-  fta            TEXT NOT NULL
+  fta            TEXT NOT NULL,
+  search_text    TEXT NOT NULL DEFAULT ''
 );`);
 parts.push("");
 
@@ -96,6 +115,7 @@ for (let start = 0; start < rows.length; start += BATCH) {
       sqlNumber(row[8]),
       sqlNumber(row[9]),
       sqlString(JSON.stringify(ftaRates)),
+      sqlString(searchText(row[1])),
     ].join(", ")})`;
   });
   parts.push(

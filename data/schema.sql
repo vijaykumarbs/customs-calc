@@ -17,7 +17,11 @@ CREATE TABLE IF NOT EXISTS hsn (
   igst           REAL NOT NULL,
   cess           REAL NOT NULL,
   flag           INTEGER NOT NULL,
-  fta            TEXT NOT NULL
+  fta            TEXT NOT NULL,
+  -- Lowercased description with non-alphanumerics collapsed to spaces and a
+  -- leading/trailing space, so search can match whole words with
+  -- `search_text LIKE '% token%'` instead of unreliable substring matches.
+  search_text    TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_hsn_chapter ON hsn (chapter);
@@ -41,6 +45,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_email ON api_keys (email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_email_unique ON api_keys (email);
 CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys (key_prefix);
 
 CREATE TABLE IF NOT EXISTS api_usage (
