@@ -1,82 +1,29 @@
-import {
-  computeDuty,
-  ftaColumnIndex,
-  formatINR,
-  istDayKey,
-  parseAmount,
-  preferentialRate,
-  searchHsn,
-} from "./duty.js";
+import { computeAssessableValue, formatINR, parseAmount } from "./duty.js";
 
-const QUOTA_KEY = "customscalc.quota.v1";
-const NOTIFY_KEY = "customscalc.notify.v1";
+/**
+ * Website controller.
+ *
+ * The tariff dataset lives in Cloudflare D1 and is only reachable through the
+ * Worker. Search returns code + description; a rate lookup or calculation is
+ * metered by an anonymous cookie quota held server-side.
+ */
+
 const $ = (id) => document.getElementById(id);
+const SEARCH_DEBOUNCE_MS = 180;
 
 const state = {
-  rows: [],
-  fta: { columns: [], rates: [] },
   meta: null,
   countries: [],
-  selectedIndex: null,
+  selected: null,
   activeOption: -1,
   options: [],
   lastResult: null,
-  freeLimit: 5,
+  quota: { limit: 5, used: 0, remaining: 5 },
   limited: new Set(),
+  searchTimer: null,
+  searchController: null,
+  requestSeq: 0,
 };
-
-/* ---------------------------------------------------------------- quota --- */
-
-function readQuota() {
-  const today = istDayKey();
-  let raw = null;
-  try {
-    raw = JSON.parse(localStorage.getItem(QUOTA_KEY) || "null");
-  } catch {
-    raw = null;
-  }
-  if (!raw || raw.day !== today) raw = { day: today, used: 0 };
-  return raw;
-}
-
-function writeQuota(quota) {
-  try {
-    localStorage.setItem(QUOTA_KEY, JSON.stringify(quota));
-  } catch {
-    /* private mode: quota becomes best-effort */
-  }
-}
-
-function quotaLeft() {
-  return Math.max(0, state.freeLimit - readQuota().used);
-}
-
-function paintQuota() {
-  const quota = readQuota();
-  const left = Math.max(0, state.freeLimit - quota.used);
-  const pct = Math.round((left / state.freeLimit) * 100);
-  const text = $("quotaText");
-  const bar = $("quotaBar");
-  const wrap = $("quota");
-
-  if (left === 0) {
-    text.textContent = "Daily free limit reached — upgrade for unlimited calculations";
-    wrap.classList.add("is-empty");
-  } else {
-    text.textContent = `${left} of ${state.freeLimit} free calculations left today`;
-    wrap.classList.remove("is-empty");
-  }
-  bar.style.width = `${pct}%`;
-  $("planChip").textContent = left === 0 ? "Free limit reached" : "Free plan";
-  $("planChip").classList.toggle("is-warn", left === 0);
-}
-
-function consumeQuota() {
-  const quota = readQuota();
-  quota.used += 1;
-  writeQuota(quota);
-  paintQuota();
-}
 
 /* --------------------------------------------------------------- helpers --- */
 
@@ -117,20 +64,69 @@ function toast(message) {
   toast._timer = setTimeout(() => el.classList.remove("is-visible"), 2800);
 }
 
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: options.body ? { "content-type": "application/json" } : undefined,
+    ...options,
+  });
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+  return { response, body };
+}
+
+function apiMessage(body, fallback) {
+  return body?.error?.message || fallback;
+}
+
 function updateUrl() {
   const params = new URLSearchParams();
-  if (state.selectedIndex !== null) params.set("hsn", state.rows[state.selectedIndex][0]);
+  if (state.selected) params.set("hsn", state.selected.code);
   if ($("country").value) params.set("country", $("country").value);
-  const cif = parseAmount($("cif").value);
-  if (Number.isFinite(cif) && cif > 0) params.set("cif", String(Math.round(cif)));
+  const goods = parseAmount($("goodsValue").value);
+  if (Number.isFinite(goods) && goods > 0) params.set("value", String(Math.round(goods)));
+  for (const [id, key] of [["freight", "freight"], ["insurance", "insurance"], ["otherCharges", "charges"]]) {
+    const amount = parseAmount($(id).value);
+    if (Number.isFinite(amount) && amount > 0) params.set(key, String(Math.round(amount)));
+  }
   const url = params.toString() ? `${location.pathname}?${params}` : location.pathname;
   history.replaceState(null, "", url);
 }
 
-function rateSummary(row) {
-  return `<span class="mini-stat"><b>BCD ${pct(row[4])}</b></span>
-    <span class="mini-stat"><b>IGST ${pct(row[7])}</b></span>
-    <span class="mini-stat">SWS ${pct(row[6])} of BCD</span>`;
+/* ---------------------------------------------------------------- quota --- */
+
+function paintQuota() {
+  const quota = state.quota;
+  const limit = Math.max(1, quota.limit || state.meta?.free_daily_limit || 5);
+  const left = Math.max(0, quota.remaining ?? limit - (quota.used || 0));
+  const pctLeft = Math.round((left / limit) * 100);
+  const text = $("quotaText");
+  const bar = $("quotaBar");
+  const wrap = $("quota");
+
+  if (left === 0) {
+    text.textContent = "Daily free limit reached — upgrade for unlimited calculations";
+    wrap.classList.add("is-empty");
+  } else {
+    text.textContent = `${left} of ${limit} free calculations left today`;
+    wrap.classList.remove("is-empty");
+  }
+  bar.style.width = `${pctLeft}%`;
+  $("planChip").textContent = left === 0 ? "Free limit reached" : "Free plan";
+  $("planChip").classList.toggle("is-warn", left === 0);
+}
+
+async function refreshQuota() {
+  try {
+    const { response, body } = await requestJson("/api/site/quota");
+    if (response.ok && body?.data) state.quota = body.data;
+  } catch {
+    /* keep the last known value */
+  }
+  paintQuota();
 }
 
 /* ---------------------------------------------------------------- search --- */
@@ -157,13 +153,13 @@ function paintActiveOption() {
   if (state.activeOption < 0) $("hsnSearch").removeAttribute("aria-activedescendant");
 }
 
-function renderResults(indices, query) {
+function renderResults(results, query) {
   const list = $("searchResults");
-  state.options = indices;
-  state.activeOption = indices.length ? 0 : -1;
+  state.options = results;
+  state.activeOption = results.length ? 0 : -1;
   list.innerHTML = "";
 
-  if (!indices.length) {
+  if (!results.length) {
     list.innerHTML = `<div class="combo-empty">No tariff line matches “${escapeHtml(query)}”.
       <span>Try the first 4 digits of the HSN code.</span></div>`;
     list.hidden = false;
@@ -171,19 +167,17 @@ function renderResults(indices, query) {
     return;
   }
 
-  indices.forEach((idx, order) => {
-    const row = state.rows[idx];
+  results.forEach((item, index) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "combo-option";
-    btn.id = `hsn-option-${order}`;
+    btn.id = `hsn-option-${index}`;
     btn.setAttribute("role", "option");
     btn.setAttribute("aria-selected", "false");
-    btn.innerHTML = `<span class="opt-code">${escapeHtml(row[0])}</span>
-      <span class="opt-desc">${escapeHtml(row[1])}</span>
-      <span class="opt-rates">${rateSummary(row)}</span>`;
+    btn.innerHTML = `<span class="opt-code">${escapeHtml(item.code)}</span>
+      <span class="opt-desc">${escapeHtml(item.description)}</span>`;
     btn.addEventListener("mousedown", (ev) => ev.preventDefault());
-    btn.addEventListener("click", () => selectRow(idx));
+    btn.addEventListener("click", () => selectCode(item.code, item.description));
     list.appendChild(btn);
   });
 
@@ -192,22 +186,56 @@ function renderResults(indices, query) {
   paintActiveOption();
 }
 
-function runSearch() {
+function renderSearchError(message) {
+  const list = $("searchResults");
+  state.options = [];
+  state.activeOption = -1;
+  list.innerHTML = `<div class="combo-empty">Search is unavailable right now.
+    <span>${escapeHtml(message || "Please try again in a moment.")}</span></div>`;
+  list.hidden = false;
+  $("hsnSearch").setAttribute("aria-expanded", "true");
+}
+
+async function runSearch() {
   const query = $("hsnSearch").value.trim();
   if (query.length < 2) {
     closeResults();
     return;
   }
-  renderResults(searchHsn(state.rows, query, 14), query);
+
+  state.searchController?.abort();
+  const controller = new AbortController();
+  state.searchController = controller;
+  const seq = ++state.requestSeq;
+
+  try {
+    const { response, body } = await requestJson(
+      `/api/site/search?q=${encodeURIComponent(query)}&limit=14`,
+      { signal: controller.signal },
+    );
+    if (seq !== state.requestSeq) return;
+    if (!response.ok) {
+      renderSearchError(apiMessage(body, "Search failed."));
+      return;
+    }
+    renderResults(body?.data?.results || [], query);
+  } catch (err) {
+    if (err.name === "AbortError") return;
+    if (seq !== state.requestSeq) return;
+    renderSearchError("Check your connection and try again.");
+  }
 }
 
-function selectRow(idx, { scroll = false } = {}) {
-  const row = state.rows[idx];
-  state.selectedIndex = idx;
-  $("hsnSearch").value = `${row[0]} — ${row[1]}`.slice(0, 120);
-  $("selCode").textContent = row[0];
-  $("selDesc").textContent = row[1];
-  $("selRates").innerHTML = rateSummary(row);
+function scheduleSearch() {
+  clearTimeout(state.searchTimer);
+  state.searchTimer = setTimeout(runSearch, SEARCH_DEBOUNCE_MS);
+}
+
+function selectCode(code, description, { scroll = false } = {}) {
+  state.selected = { code, description };
+  $("hsnSearch").value = `${code} — ${description}`.slice(0, 120);
+  $("selCode").textContent = code;
+  $("selDesc").textContent = description;
   $("selectedCard").hidden = false;
   closeResults();
   updateUrl();
@@ -219,7 +247,7 @@ function selectRow(idx, { scroll = false } = {}) {
 function loadCountries() {
   const select = $("country");
   select.replaceChildren();
-  const countries = [...state.meta.countries]
+  const countries = [...(state.meta?.countries || [])]
     .filter((c) => !/^india$/i.test(c.name))
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -273,42 +301,60 @@ function row(label, rate, amount, { strong = false, note = "" } = {}) {
   </tr>`;
 }
 
-function renderResult(result, country, ftaRow) {
+function renderResult(r, origin) {
   const body = $("resultBody");
-  const r = result;
-  const agreement = country.agreement;
+  const agreement = origin.agreement;
+  const agreementLabel = origin.agreementName || origin.agreementLabel || prettyAgreement(agreement);
+  const valuation = r.valuation || {
+    goodsValue: r.cif,
+    freight: 0,
+    insurance: 0,
+    otherCharges: 0,
+    chargesTotal: 0,
+    assessableValue: r.cif,
+  };
   const parts = [];
 
   parts.push(`<div class="result-head">
     <div class="result-title">
       <span class="pill">HSN ${escapeHtml(r.hsn)}</span>
-      <h3>${escapeHtml(r.desc)}</h3>
-      <p class="result-origin">${escapeHtml(country.name)} · ${agreement === "MFN" ? "MFN rate" : escapeHtml(country.agreementLabel)}</p>
+      <h3>${escapeHtml(r.desc || r.description)}</h3>
+      <p class="result-origin">${escapeHtml(origin.country)} · ${agreement === "MFN" ? "MFN rate" : escapeHtml(agreementLabel)}</p>
     </div>
     <div class="result-total">
       <span>Landed cost</span>
       <strong>${formatINR(r.landedCost)}</strong>
-      <small>${formatINR(r.cif)} assessable + ${formatINR(r.totalDuty)} duty</small>
+      <small>${formatINR(r.cif)} assessable + ${formatINR(r.totalDuty)} payable to customs</small>
     </div>
   </div>`);
 
   if (r.prefApplied) {
     parts.push(`<div class="banner banner-good">
       <strong>Preferential rate applied.</strong>
-      ${escapeHtml(country.agreementLabel)} BCD is ${pct(r.appliedBcdRate)} against MFN ${pct(r.bcdEffective)} —
+      ${escapeHtml(agreementLabel)} BCD is ${pct(r.appliedBcdRate)} against MFN ${pct(r.bcdEffective)} —
       saving ${formatINR(r.prefSaving)} on this shipment.
       <span>Requires a valid certificate of origin and direct consignment.</span>
     </div>`);
-  } else if (!country.modelled && agreement !== "MFN") {
+  } else if (origin.modelled === false && agreement !== "MFN") {
     parts.push(`<div class="banner banner-note">
-      <strong>${escapeHtml(country.agreementLabel)} is a limited agreement.</strong>
+      <strong>${escapeHtml(agreementLabel)} is a limited agreement.</strong>
       This line is shown at the MFN rate. Line-specific concessions are not modelled yet, so
       confirm the preferential rate against the notification before claiming it.
     </div>`);
   } else if (r.ftaRate !== null) {
     parts.push(`<div class="banner banner-note">
-      The ${escapeHtml(country.agreementLabel)} rate for this line is ${pct(r.ftaRate)}, which is not lower than
+      The ${escapeHtml(agreementLabel)} rate for this line is ${pct(r.ftaRate)}, which is not lower than
       MFN ${pct(r.bcdEffective)}. The MFN rate applies.
+    </div>`);
+  }
+
+  const chapter = Number(r.chapter);
+  if ([28, 29, 32, 38, 39, 40, 48, 69, 70, 72, 73, 76, 84, 85, 87].includes(chapter)) {
+    parts.push(`<div class="banner banner-warn">
+      <strong>Anti-dumping or safeguard duty may apply.</strong>
+      Some lines in chapter ${escapeHtml(String(r.chapter))} attract anti-dumping, countervailing or
+      safeguard duty. These are notified case by case and are not included in this estimate. Check the
+      current DGTR/CBIC notification before filing.
     </div>`);
   }
 
@@ -316,7 +362,11 @@ function renderResult(result, country, ftaRow) {
     <caption class="sr-only">Duty breakdown</caption>
     <thead><tr><th scope="col">Component</th><th scope="col">Rate</th><th scope="col">Amount</th></tr></thead>
     <tbody>
-      ${row("Assessable value (CIF)", "—", r.cif)}
+      ${row("Invoice / FOB value", "—", valuation.goodsValue)}
+      ${row("Freight to India", "—", valuation.freight)}
+      ${row("Insurance", "—", valuation.insurance)}
+      ${row("Other includible charges", "—", valuation.otherCharges)}
+      ${row("Assessable value (CIF)", "—", r.cif, { strong: true })}
       ${row("Basic customs duty (BCD)", pct(r.appliedBcdRate), r.bcd, {
         note: r.bcdStatutory !== r.bcdEffective
           ? `Statutory ${pct(r.bcdStatutory)} · effective ${pct(r.bcdEffective)}`
@@ -325,8 +375,13 @@ function renderResult(result, country, ftaRow) {
       ${row("Social welfare surcharge", `${pct(r.swsPctOfBcd ?? 10)} of BCD`, r.sws)}
       ${r.aidc ? row("AIDC", pct(r.aidcPct), r.aidc) : ""}
       ${r.cess ? row("Cess", pct(r.cessPct), r.cess) : ""}
-      ${row("IGST", pct(r.igstPct), r.igst, { note: "on CIF + BCD + SWS + AIDC + cess" })}
-      ${row("Total duty", r.effectiveDutyPct + "% of CIF", r.totalDuty, { strong: true })}
+      ${row("Customs duty before IGST", pct(r.dutyExclIgstPct), r.bcd + r.sws + r.aidc + r.cess, {
+        note: "BCD + SWS + AIDC + cess",
+      })}
+      ${row("IGST at import", pct(r.igstPct), r.igst, {
+        note: "on assessable value + BCD + SWS + AIDC + cess",
+      })}
+      ${row("Total payable to customs", r.effectiveDutyPct + "% of assessable value", r.totalDuty, { strong: true })}
       ${row("Landed cost", "—", r.landedCost, { strong: true })}
     </tbody>
   </table></div>`);
@@ -334,39 +389,55 @@ function renderResult(result, country, ftaRow) {
   parts.push(`<div class="result-meta">
     <span class="chip">Duty excl. IGST ${pct(r.dutyExclIgstPct)}</span>
     <span class="chip">Effective ${pct(r.effectiveDutyPct)}</span>
-    ${ftaRow ? `<span class="chip chip-muted">MFN BCD ${pct(r.bcdEffective)} · ${escapeHtml(country.agreementLabel)} ${pct(r.ftaRate ?? r.bcdEffective)}</span>` : ""}
+    ${r.ftaRate !== null ? `<span class="chip chip-muted">MFN BCD ${pct(r.bcdEffective)} · ${escapeHtml(agreementLabel)} ${pct(r.ftaRate)}</span>` : ""}
     <span class="chip ${r.flag === 0 ? "chip-good" : "chip-warn"}">${escapeHtml(r.flagLabel)}</span>
   </div>
   <div class="result-actions">
     <button class="btn btn-outline btn-sm" type="button" id="copyBtn">Copy breakdown</button>
+    <button class="btn btn-outline btn-sm" type="button" id="csvBtn">Download CSV</button>
+    <button class="btn btn-ghost btn-sm" type="button" id="printBtn">Print / save PDF</button>
     <a class="btn btn-ghost btn-sm" href="#calculator" id="recalcLink">Change shipment</a>
   </div>
-  <p class="result-fine">Indicative only. Anti-dumping, safeguard, TRQ, specific duties and origin verification are excluded. Confirm on ICEGATE before filing.</p>`);
+  <p class="result-fine">Indicative only. Assessable value build-up uses invoice value plus freight, insurance and other includible charges. Anti-dumping, safeguard, TRQ, specific duties and origin verification are excluded. Confirm on ICEGATE before filing.${r.dataAsOf ? ` Tariff data as on ${escapeHtml(r.dataAsOf)}.` : ""}</p>`);
 
   body.innerHTML = parts.join("");
   body.hidden = false;
   $("resultEmpty").hidden = true;
 
-  $("copyBtn").addEventListener("click", () => copyBreakdown(r, country));
+  $("copyBtn").addEventListener("click", () => copyBreakdown(r, origin));
+  $("csvBtn").addEventListener("click", () => downloadCsv(r, origin));
+  $("printBtn").addEventListener("click", () => window.print());
   $("recalcLink").addEventListener("click", () => {
     $("hsnSearch").focus();
   });
 }
 
-async function copyBreakdown(r, country) {
+async function copyBreakdown(r, origin) {
+  const agreementLabel = origin.agreementName || prettyAgreement(origin.agreement);
+  const valuation = r.valuation || {
+    goodsValue: r.cif,
+    freight: 0,
+    insurance: 0,
+    otherCharges: 0,
+  };
   const lines = [
-    `CustomsCalc — indicative import duty`,
-    `HSN ${r.hsn} · ${r.desc}`,
-    `Origin: ${country.name}${country.agreement !== "MFN" ? ` (${country.agreementLabel})` : " (MFN)"}`,
-    `Assessable value: ${formatINR(r.cif)}`,
+    "CustomsCalc — indicative import duty",
+    `HSN ${r.hsn} · ${r.desc || r.description}`,
+    `Origin: ${origin.country}${origin.agreement !== "MFN" ? ` (${agreementLabel})` : " (MFN)"}`,
+    `Invoice / FOB value: ${formatINR(valuation.goodsValue)}`,
+    `Freight: ${formatINR(valuation.freight)}`,
+    `Insurance: ${formatINR(valuation.insurance)}`,
+    `Other includible charges: ${formatINR(valuation.otherCharges)}`,
+    `Assessable value (CIF): ${formatINR(r.cif)}`,
     `BCD: ${pct(r.appliedBcdRate)} = ${formatINR(r.bcd)}`,
     `SWS: ${formatINR(r.sws)}`,
     r.aidc ? `AIDC: ${formatINR(r.aidc)}` : "",
     r.cess ? `Cess: ${formatINR(r.cess)}` : "",
-    `IGST: ${pct(r.igstPct)} = ${formatINR(r.igst)}`,
-    `Total duty: ${formatINR(r.totalDuty)} (${pct(r.effectiveDutyPct)} of CIF)`,
+    `IGST at import: ${pct(r.igstPct)} = ${formatINR(r.igst)}`,
+    `Total payable to customs: ${formatINR(r.totalDuty)} (${pct(r.effectiveDutyPct)} of assessable value)`,
     `Landed cost: ${formatINR(r.landedCost)}`,
-    `Verify on ICEGATE before filing.`,
+    r.dataAsOf ? `Tariff data as on: ${r.dataAsOf}` : "",
+    "Verify on ICEGATE before filing.",
   ].filter(Boolean);
 
   try {
@@ -377,29 +448,107 @@ async function copyBreakdown(r, country) {
   }
 }
 
+function downloadCsv(r, origin) {
+  const valuation = r.valuation || {
+    goodsValue: r.cif,
+    freight: 0,
+    insurance: 0,
+    otherCharges: 0,
+  };
+  const escape = (value) => {
+    const text = String(value ?? "");
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const rows = [
+    ["Field", "Value"],
+    ["HSN", r.hsn],
+    ["Description", r.desc || r.description],
+    ["Origin", origin.country],
+    ["Agreement", origin.agreementName || origin.agreement],
+    ["Invoice / FOB value", valuation.goodsValue],
+    ["Freight", valuation.freight],
+    ["Insurance", valuation.insurance],
+    ["Other includible charges", valuation.otherCharges],
+    ["Assessable value (CIF)", r.cif],
+    ["BCD rate %", r.appliedBcdRate],
+    ["BCD", r.bcd],
+    ["SWS", r.sws],
+    ["AIDC", r.aidc],
+    ["Cess", r.cess],
+    ["Duty before IGST", r.bcd + r.sws + r.aidc + r.cess],
+    ["IGST rate %", r.igstPct],
+    ["IGST", r.igst],
+    ["Total payable to customs", r.totalDuty],
+    ["Landed cost", r.landedCost],
+    ["Rate flag", r.flagLabel],
+    ["Tariff data as on", r.dataAsOf || ""],
+    ["Note", "Indicative only. Verify on ICEGATE before filing."],
+  ];
+  const csv = rows.map((row) => row.map(escape).join(",")).join("\r\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `customscalc-${r.hsn}-${r.cif}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  toast("CSV downloaded");
+}
+
 function showQuotaWall() {
   openPricing();
-  toast("Free limit reached. The unlimited plan is launching soon.");
+  toast("Free limit reached. The paid plan is not open yet — join the waitlist.");
+}
+
+/* -------------------------------------------------------------- valuation --- */
+
+function readValuation({ focus = false } = {}) {
+  const goodsValue = parseAmount($("goodsValue").value);
+  const freight = parseAmount($("freight").value) || 0;
+  const insurance = parseAmount($("insurance").value) || 0;
+  const otherCharges = parseAmount($("otherCharges").value) || 0;
+
+  if (!Number.isFinite(goodsValue) || goodsValue <= 0) {
+    if (focus) {
+      toast("Enter the invoice / FOB value in rupees.");
+      $("goodsValue").focus();
+    }
+    return null;
+  }
+  if ([freight, insurance, otherCharges].some((n) => !Number.isFinite(n) || n < 0)) {
+    if (focus) toast("Freight, insurance and other charges cannot be negative.");
+    return null;
+  }
+  try {
+    return computeAssessableValue({ goodsValue, freight, insurance, otherCharges });
+  } catch (err) {
+    if (focus) toast(err.message || "Check the shipment values.");
+    return null;
+  }
+}
+
+function paintValuation() {
+  const valuation = readValuation();
+  const amount = $("avAmount");
+  if (!valuation) {
+    amount.textContent = "—";
+    return;
+  }
+  amount.textContent = formatINR(valuation.assessableValue);
 }
 
 /* -------------------------------------------------------------- calculate --- */
 
-function calculate(ev) {
+async function calculate(ev) {
   ev.preventDefault();
 
-  if (state.selectedIndex === null) {
+  if (!state.selected) {
     const typed = $("hsnSearch").value.trim();
     const digits = typed.replace(/\D/g, "");
-    if (!typed) {
-      toast("Pick an HSN code from the search results first.");
-      $("hsnSearch").focus();
-      return;
-    }
-    const found = digits
-      ? state.rows.findIndex((r) => r[0] === digits)
-      : state.rows.findIndex((r) => r[1].toLowerCase().includes(typed.toLowerCase()));
-    if (found >= 0) {
-      selectRow(found);
+    if (digits.length === 8) {
+      selectCode(digits, "Selected HSN code");
     } else {
       toast("Pick an HSN code from the search results first.");
       $("hsnSearch").focus();
@@ -407,42 +556,86 @@ function calculate(ev) {
     }
   }
 
-  const cif = parseAmount($("cif").value);
-  if (!Number.isFinite(cif) || cif <= 0) {
-    toast("Enter the assessable value in rupees.");
-    $("cif").focus();
-    return;
-  }
+  const valuation = readValuation({ focus: true });
+  if (!valuation) return;
 
-  if (quotaLeft() <= 0) {
+  if (state.quota.remaining <= 0) {
     showQuotaWall();
     return;
   }
 
-  const idx = state.selectedIndex;
-  const rowData = state.rows[idx];
-  const ftaRow = state.fta.rates[idx];
   const country = selectedCountry();
-  const pref = preferentialRate(state.fta, ftaRow, country.agreement);
+  const btn = $("calcBtn");
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Calculating…";
 
-  let result;
   try {
-    result = computeDuty({ cif, row: rowData, ftaRate: pref });
-  } catch (err) {
-    toast(err.message || "Could not calculate duty.");
-    return;
-  }
+    const { response, body } = await requestJson("/api/site/quote", {
+      method: "POST",
+      body: JSON.stringify({
+        hsn: state.selected.code,
+        country: country.name,
+        goodsValue: valuation.goodsValue,
+        freight: valuation.freight,
+        insurance: valuation.insurance,
+        otherCharges: valuation.otherCharges,
+      }),
+    });
 
-  result.swsPctOfBcd = rowData[6];
-  result.igstPct = rowData[7];
-  state.lastResult = { result, country, ftaRow };
+    if (!response.ok) {
+      if (body?.error?.code === "site_quota_exceeded") {
+        state.quota = { ...state.quota, remaining: 0 };
+        paintQuota();
+        showQuotaWall();
+      } else {
+        toast(apiMessage(body, "Could not calculate duty."));
+      }
+      return;
+    }
 
-  consumeQuota();
-  renderResult(result, country, ftaRow);
-  updateUrl();
+    const data = body.data;
+    if (data.quota) state.quota = data.quota;
+    paintQuota();
 
-  if (window.matchMedia("(max-width: 900px)").matches) {
-    $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+    const result = {
+      hsn: data.hsn,
+      desc: data.description,
+      chapter: data.chapter,
+      cif: data.cif,
+      valuation: data.valuation,
+      bcdStatutory: data.rates.bcdStatutory,
+      bcdEffective: data.rates.bcdEffective,
+      appliedBcdRate: data.rates.appliedBcd,
+      ftaRate: data.rates.preferential,
+      swsPctOfBcd: data.rates.swsOfBcd,
+      igstPct: data.rates.igst,
+      aidcPct: data.rates.aidc,
+      cessPct: data.rates.cess,
+      ...data.amounts,
+      effectiveDutyPct: data.effectiveDutyPct,
+      dutyExclIgstPct: data.dutyExclIgstPct,
+      prefApplied: data.prefApplied,
+      prefSaving: data.prefSaving,
+      flag: data.flag,
+      flagLabel: data.flagLabel,
+      dataAsOf: data.dataAsOf || null,
+    };
+
+    state.lastResult = { result, origin: data.origin };
+    state.selected = { code: data.hsn, description: data.description };
+    $("selDesc").textContent = data.description;
+    renderResult(result, data.origin);
+    updateUrl();
+
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  } catch {
+    toast("Could not reach the server. Check your connection and try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
   }
 }
 
@@ -496,20 +689,31 @@ function wireModal() {
     }
   });
 
-  $("notifyForm").addEventListener("submit", (ev) => {
+  $("notifyForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const email = $("notifyEmail").value.trim();
     if (!email) return;
+
+    const status = $("notifyStatus");
+    const button = $("notifyForm").querySelector("button[type=submit]");
+    button.disabled = true;
     try {
-      const saved = JSON.parse(localStorage.getItem(NOTIFY_KEY) || "[]");
-      saved.push({ email, at: istDayKey() });
-      localStorage.setItem(NOTIFY_KEY, JSON.stringify(saved.slice(-5)));
+      const { response, body } = await requestJson("/api/site/notify", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      if (!response.ok) {
+        status.textContent = apiMessage(body, "Could not save that email. Try again.");
+        return;
+      }
+      status.textContent = `Saved ${email}. We'll write when the ₹99 plan opens.`;
+      $("notifyEmail").value = "";
+      toast("You're on the list");
     } catch {
-      /* best effort */
+      status.textContent = "Could not reach the server. Try again.";
+    } finally {
+      button.disabled = false;
     }
-    $("notifyStatus").textContent = `Saved ${email}. We'll write when the ₹99 plan opens.`;
-    $("notifyEmail").value = "";
-    toast("You're on the list");
   });
 }
 
@@ -518,12 +722,12 @@ function wireModal() {
 function wireCombo() {
   const input = $("hsnSearch");
   input.addEventListener("input", () => {
-    state.selectedIndex = null;
+    state.selected = null;
     $("selectedCard").hidden = true;
-    runSearch();
+    scheduleSearch();
   });
   input.addEventListener("focus", () => {
-    if (input.value.trim().length >= 2 && state.selectedIndex === null) runSearch();
+    if (input.value.trim().length >= 2 && !state.selected) runSearch();
   });
   input.addEventListener("keydown", (ev) => {
     const list = $("searchResults");
@@ -544,9 +748,10 @@ function wireCombo() {
           : (state.activeOption - 1 + n) % n;
       paintActiveOption();
     } else if (ev.key === "Enter") {
-      if (state.activeOption >= 0 && state.options[state.activeOption] !== undefined) {
+      const item = state.options[state.activeOption];
+      if (item) {
         ev.preventDefault();
-        selectRow(state.options[state.activeOption]);
+        selectCode(item.code, item.description);
       }
     } else if (ev.key === "Escape") {
       closeResults();
@@ -560,29 +765,50 @@ function wireCombo() {
 function wireAmounts() {
   document.querySelectorAll("[data-amount]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      $("cif").value = plainNumber(Number(btn.dataset.amount));
+      $("goodsValue").value = plainNumber(Number(btn.dataset.amount));
+      paintValuation();
       updateUrl();
     });
   });
-  $("cif").addEventListener("blur", () => {
-    const n = parseAmount($("cif").value);
-    if (Number.isFinite(n) && n > 0) $("cif").value = plainNumber(n);
-  });
+
+  for (const id of ["goodsValue", "freight", "insurance", "otherCharges"]) {
+    const input = $(id);
+    input.addEventListener("input", () => {
+      paintValuation();
+      updateUrl();
+    });
+    input.addEventListener("blur", () => {
+      const n = parseAmount(input.value);
+      if (Number.isFinite(n) && n >= 0) input.value = plainNumber(n);
+      paintValuation();
+    });
+  }
 }
 
-function applyUrlState() {
+async function applyUrlState() {
   const params = new URLSearchParams(location.search);
   const hsn = (params.get("hsn") || "").replace(/\D/g, "");
-  if (hsn) {
-    const idx = state.rows.findIndex((r) => r[0] === hsn || r[0].startsWith(hsn));
-    if (idx >= 0) selectRow(idx);
+  if (hsn.length === 8) {
+    try {
+      const { response, body } = await requestJson(`/api/site/hsn/${encodeURIComponent(hsn)}`);
+      if (response.ok && body?.data) {
+        selectCode(body.data.hsn, body.data.description);
+      }
+    } catch {
+      /* leave the field empty */
+    }
   }
   const country = params.get("country");
   if (country && [...$("country").options].some((o) => o.value === country)) {
     $("country").value = country;
   }
-  const cif = Number(params.get("cif"));
-  if (Number.isFinite(cif) && cif > 0) $("cif").value = plainNumber(cif);
+  const goods = Number(params.get("value") || params.get("cif"));
+  if (Number.isFinite(goods) && goods > 0) $("goodsValue").value = plainNumber(goods);
+  for (const [param, id] of [["freight", "freight"], ["insurance", "insurance"], ["charges", "otherCharges"]]) {
+    const amount = Number(params.get(param));
+    if (Number.isFinite(amount) && amount >= 0) $(id).value = plainNumber(amount);
+  }
+  paintValuation();
 }
 
 async function init() {
@@ -590,32 +816,36 @@ async function init() {
   wireModal();
   wireCombo();
   wireAmounts();
-  paintQuota();
   $("calcForm").addEventListener("submit", calculate);
   $("country").addEventListener("change", updateUrl);
+  paintValuation();
+  paintQuota();
 
   try {
-    const [hsn, fta, meta] = await Promise.all(
-      ["data/hsn.json", "data/fta.json", "data/meta.json"].map((path) =>
-        fetch(path, { cache: "force-cache" }).then((res) => {
-          if (!res.ok) throw new Error(`${path} returned ${res.status}`);
-          return res.json();
-        }),
-      ),
-    );
-    state.rows = hsn;
-    state.fta = fta;
-    state.meta = meta;
-    state.freeLimit = meta.free_daily_limit || 5;
+    const [metaResult, quotaResult] = await Promise.all([
+      requestJson("/api/site/meta"),
+      requestJson("/api/site/quota"),
+    ]);
+
+    if (!metaResult.response.ok || !metaResult.body?.data) {
+      throw new Error(apiMessage(metaResult.body, "The tariff service is unavailable."));
+    }
+    state.meta = metaResult.body.data;
+    state.countries = state.meta.countries || [];
     state.limited = new Set(
-      (meta.agreements || [])
+      (state.meta.agreements || [])
         .filter((a) => /^No\b/i.test(a.modelled || ""))
         .map((a) => a.col),
     );
+    if (quotaResult.response.ok && quotaResult.body?.data) {
+      state.quota = quotaResult.body.data;
+    } else {
+      state.quota = { limit: state.meta.free_daily_limit || 5, used: 0, remaining: state.meta.free_daily_limit || 5 };
+    }
 
     loadCountries();
     paintQuota();
-    applyUrlState();
+    await applyUrlState();
 
     $("calcBtn").disabled = false;
     $("calcBtn").textContent = "Calculate landed cost";
@@ -623,10 +853,12 @@ async function init() {
     $("calcBtn").disabled = true;
     $("calcBtn").textContent = "Data unavailable";
     $("resultEmpty").innerHTML = `<div class="empty-icon" aria-hidden="true">!</div>
-      <h3>Could not load the tariff data</h3>
-      <p>${escapeHtml(err.message)}. Refresh the page, or check that <code>data/</code> is deployed next to the app.</p>`;
+      <h3>Could not load the tariff service</h3>
+      <p>${escapeHtml(err.message || "Please refresh in a moment.")}</p>`;
     console.error(err);
   }
+
+  refreshQuota();
 }
 
 init();

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms of use — CustomsCalc</title>
+  <meta name="description" content="Terms for using the CustomsCalc website and REST API, including data caveats, API fair use and intellectual property.">
+  <meta name="theme-color" content="#0b1f3a">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://customs.vijayebhava.com/terms/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css?v=3">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="/" aria-label="CustomsCalc home">
+        <span class="brand-mark" aria-hidden="true">₹</span>
+        <span class="brand-name">Customs<span>Calc</span></span>
+        <span class="brand-tag">India</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="/">Calculator</a>
+        <a href="/api-docs/">API docs</a>
+        <a href="/terms/">Terms</a>
+        <a href="/privacy/">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="legal-main" id="main">
+    <div class="wrap legal-wrap">
+      <p class="eyebrow">Legal</p>
+      <h1>Terms of use</h1>
+      <p class="legal-meta">Last updated: 15 November 2026</p>
+
+      <p>
+        These terms govern your use of the CustomsCalc website and REST API (the “service”).
+        By using the service you agree to them. If you do not agree, do not use the service.
+      </p>
+
+      <h2>1. What the service is</h2>
+      <p>
+        CustomsCalc provides indicative Indian customs duty and landed-cost calculations for
+        import planning. It is an information tool for businesses and professionals. It is not
+        legal, tax, accounting or customs advice, and it is not a substitute for a licensed
+        customs broker, a Bill of Entry filing or an ICEGATE assessment.
+      </p>
+
+      <h2>2. Data sources and caveats</h2>
+      <ul>
+        <li>
+          Rates are derived from the CBIC working tariff as on 30 June 2025, with a curated set
+          of later effective-rate changes and FTA schedules. They are updated manually and may
+          lag a notification.
+        </li>
+        <li>
+          11,906 lines carry a line-level statutory BCD rate, including 144 compound or
+          specific-rate parses that are approximate. The remaining 2,510 lines are dataset-only
+          and flagged for verification. Five limited PTAs are shown at MFN.
+        </li>
+        <li>
+          Anti-dumping duty, countervailing duty, safeguard duty, tariff-rate quotas, specific
+          duties, valuation adjustments and origin verification are excluded. They can change
+          the amount payable.
+        </li>
+        <li>
+          Every result carries a verification flag. Always confirm the rate and the assessment
+          on ICEGATE before filing a Bill of Entry.
+        </li>
+      </ul>
+
+      <h2>3. Free website use</h2>
+      <p>
+        The public calculator includes five billable calculations per Indian calendar day,
+        tracked by an anonymous cookie with a per-connection abuse backstop. HSN search and
+        code/description lookup are free. We may change or withdraw the free allowance.
+      </p>
+
+      <h2>4. API access</h2>
+      <ul>
+        <li>A free API key includes 10 billable calls per Indian calendar month. Search, metadata and usage checks are free.</li>
+        <li>Keys are personal to the account. Keep them server-side; do not embed them in public browser code.</li>
+        <li>
+          You may use the API to power your own applications and internal workflows. You may not
+          resell, redistribute or sublicense the API, the keys, or bulk extracts of the rate
+          dataset, or use the service to build a competing tariff database.
+        </li>
+        <li>
+          Automated scraping, quota evasion, key sharing, brute-force attempts and requests that
+          disrupt the service are prohibited.
+        </li>
+        <li>We may revoke a key or rate-limit traffic to protect the service.</li>
+      </ul>
+
+      <h2>5. Paid plan</h2>
+      <p>
+        The ₹99/month paid plan is not open for payment yet. The waitlist collects interest only
+        and creates no contract or entitlement. When payments open, the plan will be subject to
+        a fair-use policy and separate checkout terms. “Unlimited” means no published monthly
+        cap for normal workloads, not unlimited automated extraction.
+      </p>
+
+      <h2>6. Intellectual property</h2>
+      <p>
+        The source code for this application is licensed under the MIT License; see the
+        <code>LICENSE</code> file in the repository. The compiled tariff dataset, the master
+        workbook, the derived JSON/SQL and the API responses are proprietary and are licensed,
+        not sold; see <code>DATA-LICENSE.md</code>. You may use individual results in your own
+        costing and filing work. You may not redistribute the dataset in bulk.
+      </p>
+
+      <h2>7. Availability and changes</h2>
+      <p>
+        The service is provided on an “as is” and “as available” basis. We may change endpoints,
+        fields, quotas, rates or the dataset, and may suspend the service for maintenance. We
+        aim to give reasonable notice of breaking API changes but do not guarantee it.
+      </p>
+
+      <h2>8. Limitation of liability</h2>
+      <p>
+        To the maximum extent permitted by law, CustomsCalc and its operators are not liable for
+        any indirect, incidental, special, consequential or punitive loss, or for lost profits,
+        lost shipments, demurrage, penalties, duty assessments or filing errors arising from use
+        of the service. Our total liability for any claim relating to the service is limited to
+        the greater of the amount you paid us in the previous three months or ₹1,000.
+      </p>
+
+      <h2>9. Indemnity</h2>
+      <p>
+        You are responsible for how you use the service and for complying with customs, tax and
+        export-control law. You agree to indemnify the operators against claims arising from your
+        misuse of the service or your breach of these terms.
+      </p>
+
+      <h2>10. Governing law</h2>
+      <p>
+        These terms are governed by the laws of India. Courts in India have exclusive
+        jurisdiction, subject to any mandatory consumer protection rules that apply to you.
+      </p>
+
+      <h2>11. Contact</h2>
+      <p>
+        Questions about these terms:
+        <a href="mailto:legal@vijayebhava.com">legal@vijayebhava.com</a>. Privacy questions are
+        covered by the <a href="/privacy/">privacy policy</a>.
+      </p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <a class="brand brand-footer" href="/">
+          <span class="brand-mark" aria-hidden="true">₹</span>
+          <span class="brand-name">Customs<span>Calc</span></span>
+        </a>
+        <p class="footer-note">India import duty and landed-cost estimates. Not legal or customs advice.</p>
+      </div>
+      <div class="footer-links">
+        <a href="/">Calculator</a>
+        <a href="/api-docs/">API docs</a>
+        <a href="/terms/">Terms</a>
+        <a href="/privacy/">Privacy</a>
+      </div>
+    </div>
+    <div class="wrap footer-bottom">
+      <span>© 2026 CustomsCalc</span>
+      <span>Rates are indicative · verify on ICEGATE</span>
+    </div>
+  </footer>
+
+</body>
+</html>

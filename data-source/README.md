@@ -2,6 +2,10 @@
 
 Prepared 13-Nov-2026.
 
+> **Proprietary data.** These files are not covered by the MIT licence for the
+> application code. They are private to the operator and may not be redistributed
+> in bulk. See [`../DATA-LICENSE.md`](../DATA-LICENSE.md).
+
 ## Files
 
 | File | What it is |
@@ -42,10 +46,11 @@ Update `AGREEMENTS` in `build_bcd_master.py` when a notification or entry-into-f
 
 ## Inside this app
 
-`data-source/` keeps the two source files the exporter needs. The public site
-runs from the compact JSON already committed under `web/data/`, so these
-workbooks are not served to browsers.
+`data-source/` keeps the two source files the exporter needs. The production
+site runs from compact JSON imported into Cloudflare D1 from `data/`, so neither
+these workbooks nor the exported JSON are served to browsers.
 
 ```bash
-python scripts/export_data.py     # rebuild web/data/*.json from data-source/
+python scripts/export_data.py     # rebuild data/*.json from data-source/
+node scripts/build_seed.mjs       # rebuild data/seed.sql for D1
 ```

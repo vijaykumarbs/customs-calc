@@ -1,3 +1,8 @@
 name = "india-customs-duty"
 pages_build_output_dir = "web"
 compatibility_date = "2026-11-14"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "customs-calc"
+database_id = "d0a66a58-5dc8-444f-883d-d9f686a0da3b"

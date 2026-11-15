@@ -30,6 +30,50 @@ export function istDayKey(now = Date.now()) {
   return shifted.toISOString().slice(0, 10);
 }
 
+/**
+ * Build the customs assessable value from the invoice and transport costs.
+ *
+ * Indian customs value is normally the transaction value plus freight,
+ * insurance and other includible charges (landing, packing, commissions,
+ * etc.). The result is the CIF value that BCD, SWS, AIDC, cess and IGST use.
+ *
+ * @param {object} input
+ * @param {number} input.goodsValue    Invoice / FOB value in rupees.
+ * @param {number} [input.freight]     Freight to India.
+ * @param {number} [input.insurance]   Marine insurance.
+ * @param {number} [input.otherCharges] Landing, packing, commission, etc.
+ * @returns {{goodsValue:number, freight:number, insurance:number,
+ *            otherCharges:number, chargesTotal:number, assessableValue:number}}
+ */
+export function computeAssessableValue({
+  goodsValue,
+  freight = 0,
+  insurance = 0,
+  otherCharges = 0,
+} = {}) {
+  const goods = Number(goodsValue);
+  if (!Number.isFinite(goods) || goods <= 0) {
+    throw new RangeError("goodsValue must be > 0");
+  }
+  const charges = [freight, insurance, otherCharges].map((value) => {
+    const n = Number(value ?? 0);
+    if (!Number.isFinite(n) || n < 0) {
+      throw new RangeError("freight, insurance and otherCharges must be >= 0");
+    }
+    return round2(n);
+  });
+  const [freightValue, insuranceValue, otherValue] = charges;
+  const chargesTotal = round2(freightValue + insuranceValue + otherValue);
+  return {
+    goodsValue: round2(goods),
+    freight: freightValue,
+    insurance: insuranceValue,
+    otherCharges: otherValue,
+    chargesTotal,
+    assessableValue: round2(round2(goods) + chargesTotal),
+  };
+}
+
 function dutyStack(cif, bcdRate, aidcPct, swsPctOfBcd, cessPct, igstPct) {
   const bcd = round2((cif * bcdRate) / 100);
   const sws = round2((bcd * swsPctOfBcd) / 100);

@@ -16,7 +16,7 @@
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/styles.css?v=3">
 </head>
 <body>
   <a class="skip-link" href="#calculator">Skip to calculator</a>
@@ -32,6 +32,7 @@
         <a href="#calculator">Calculator</a>
         <a href="#how">How it works</a>
         <a href="#coverage">Coverage</a>
+        <a href="/api-docs/">Developers</a>
         <button class="btn btn-ghost btn-sm" type="button" data-open-pricing>Pricing</button>
       </nav>
       <span class="plan-chip" id="planChip">Free plan</span>
@@ -85,7 +86,7 @@
           <form class="calc-form" id="calcForm" novalidate>
             <div class="calc-form-head">
               <h2>Import duty calculator</h2>
-              <p>Rates update with each CBIC notification.</p>
+              <p>Indicative CBIC tariff data as on 30 June 2025, with curated later effective-rate changes. Verify on ICEGATE before filing.</p>
             </div>
 
             <label class="field-label" for="hsnSearch">HSN code or product</label>
@@ -110,7 +111,7 @@
                 <span class="pill">HSN <span id="selCode"></span></span>
                 <strong id="selDesc"></strong>
               </div>
-              <div class="selected-rates" id="selRates"></div>
+              <p class="selected-note">Rates stay on our server and are applied when you calculate.</p>
             </div>
 
             <div class="field-grid">
@@ -120,16 +121,49 @@
                 <p class="hint">Where the goods are made, not where they ship from.</p>
               </div>
               <div>
-                <label class="field-label" for="cif">Assessable value (CIF, ₹)</label>
+                <label class="field-label" for="goodsValue">Invoice / FOB value (₹)</label>
                 <div class="money">
                   <span aria-hidden="true">₹</span>
-                  <input id="cif" class="input" type="text" inputmode="numeric" value="1,00,000" autocomplete="off">
+                  <input id="goodsValue" class="input" type="text" inputmode="numeric" value="1,00,000" autocomplete="off">
                 </div>
-                <p class="hint">Use CIF + 1% landing charge as the assessable value where insurance is unknown. AIDC and cess are added separately.</p>
+                <p class="hint">The price paid for the goods, before freight, insurance and landing charges.</p>
               </div>
             </div>
 
-            <div class="quick-amounts" aria-label="Quick amounts">
+            <div class="field-grid field-grid-3">
+              <div>
+                <label class="field-label" for="freight">Freight to India (₹)</label>
+                <div class="money">
+                  <span aria-hidden="true">₹</span>
+                  <input id="freight" class="input" type="text" inputmode="numeric" value="0" autocomplete="off">
+                </div>
+              </div>
+              <div>
+                <label class="field-label" for="insurance">Insurance (₹)</label>
+                <div class="money">
+                  <span aria-hidden="true">₹</span>
+                  <input id="insurance" class="input" type="text" inputmode="numeric" value="0" autocomplete="off">
+                </div>
+              </div>
+              <div>
+                <label class="field-label" for="otherCharges">Other charges (₹)</label>
+                <div class="money">
+                  <span aria-hidden="true">₹</span>
+                  <input id="otherCharges" class="input" type="text" inputmode="numeric" value="0" autocomplete="off">
+                </div>
+              </div>
+            </div>
+            <p class="hint charges-hint">Include landing charges, packing, commissions and other costs includible in the customs value. Add only amounts that form part of the assessable value.</p>
+
+            <div class="valuation-card" id="valuationCard">
+              <div class="valuation-row">
+                <span>Assessable value (CIF)</span>
+                <strong id="avAmount">₹1,00,000</strong>
+              </div>
+              <p class="hint">Invoice + freight + insurance + other charges. BCD, SWS, AIDC, cess and IGST are applied to this value.</p>
+            </div>
+
+            <div class="quick-amounts" aria-label="Quick invoice amounts">
               <button type="button" data-amount="100000">₹1L</button>
               <button type="button" data-amount="500000">₹5L</button>
               <button type="button" data-amount="1000000">₹10L</button>
@@ -142,7 +176,7 @@
 
             <div class="quota" id="quota">
               <div class="quota-row">
-                <span id="quotaText">5 of 5 free calculations left today</span>
+                <span id="quotaText">Loading today’s free quota…</span>
                 <button class="link" type="button" data-open-pricing>Upgrade</button>
               </div>
               <div class="quota-bar"><span id="quotaBar"></span></div>
@@ -184,7 +218,7 @@
           <article class="step">
             <span class="step-num">01</span>
             <h3>Find the tariff line</h3>
-            <p>Search by 4–8 digit HSN code or by product description across 14,416 lines of the Indian customs tariff.</p>
+            <p>Search by 4–8 digit HSN code or by product description across 14,416 lines, then select the 8-digit tariff line you will file.</p>
           </article>
           <article class="step">
             <span class="step-num">02</span>
@@ -204,11 +238,16 @@
       <div class="wrap coverage-grid">
         <div>
           <p class="eyebrow">Coverage</p>
-          <h2>Built on the CBIC tariff, not on guesswork.</h2>
+          <h2>Built on the CBIC tariff, with the gaps marked.</h2>
           <p class="lede-sm">
             Line-level BCD from the CBIC working-tariff chapter PDFs, IGST from the GST rate
             schedule, and preferential rates for the agreements India has in force — including
             UAE CEPA, Australia ECTA, EFTA TEPA, UK CETA, Oman CEPA and New Zealand FTA.
+          </p>
+          <p class="lede-sm">
+            11,906 lines carry a line-level statutory BCD rate (144 compound or specific-rate
+            parses are approximate). The remaining 2,510 lines are dataset-only and marked for
+            verification. Five limited PTAs are shown at MFN. Every result carries its flag.
           </p>
           <a class="text-link" href="#calculator">Try a calculation</a>
         </div>
@@ -221,6 +260,27 @@
       </div>
     </section>
 
+    <section id="developers" class="section section-tint">
+      <div class="wrap dev-band">
+        <div>
+          <p class="eyebrow">Developers</p>
+          <h2>The same tariff, inside your own application.</h2>
+          <p class="lede-sm">
+            Query BCD, IGST, SWS and preferential FTA rates with one REST API.
+            Free keys include 10 billable lookups a month and HSN search is free.
+            The master dataset is never shipped to the browser.
+          </p>
+          <a class="btn btn-primary" href="/api-docs/">Read the API docs</a>
+        </div>
+        <ul class="dev-points">
+          <li><strong>GET</strong> /api/v1/hsn/&lt;code&gt; — full rate stack</li>
+          <li><strong>POST</strong> /api/v1/calculate — landed cost</li>
+          <li><strong>GET</strong> /api/v1/search — code and description</li>
+          <li>Hashed keys · monthly quota · JSON errors</li>
+        </ul>
+      </div>
+    </section>
+
     <section id="pricing" class="section">
       <div class="wrap pricing-wrap">
         <div class="pricing-copy">
@@ -228,10 +288,11 @@
           <h2>Free while you explore.<br>₹99/month when you ship regularly.</h2>
           <p class="lede-sm">
             The free plan includes five landed-cost calculations per day and unlimited HSN lookups.
-            The unlimited plan removes the daily cap and is launching soon.
+            The paid plan removes the daily cap under a fair-use policy. Payments are not open yet —
+            use the waitlist and we will email you when the ₹99/month plan is available.
           </p>
           <ul class="tick-list">
-            <li>Unlimited landed-cost calculations</li>
+            <li>Unlimited (fair use) landed-cost calculations</li>
             <li>All HSN codes and 20 trade agreements</li>
             <li>Preference vs MFN comparison on every line</li>
             <li>Copy-ready breakdown for costing sheets</li>
@@ -240,9 +301,9 @@
         <div class="price-card">
           <span class="price-badge">Launching soon</span>
           <div class="price"><span>₹</span>99<small>/month</small></div>
-          <p>Unlimited calculations. Cancel anytime.</p>
-          <button class="btn btn-primary btn-block" type="button" data-open-pricing>Get notified</button>
-          <p class="price-note">No payment is collected in this version.</p>
+          <p>Unlimited (fair use) calculations. Cancel anytime.</p>
+          <button class="btn btn-primary btn-block" type="button" data-open-pricing>Join the waitlist</button>
+          <p class="price-note">Payments are not open yet. No payment is collected in this version.</p>
         </div>
       </div>
     </section>
@@ -292,6 +353,9 @@
       <div class="footer-links">
         <a href="#calculator">Calculator</a>
         <a href="#coverage">Coverage</a>
+        <a href="/api-docs/">API docs</a>
+        <a href="/privacy/">Privacy</a>
+        <a href="/terms/">Terms</a>
         <button class="link" type="button" data-open-pricing>Pricing</button>
       </div>
     </div>
@@ -306,11 +370,11 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pricingTitle">
       <button class="modal-close" type="button" aria-label="Close" data-close-modal>&times;</button>
       <span class="price-badge">Launching soon</span>
-      <h2 id="pricingTitle">Go unlimited for ₹99<span>/month</span></h2>
-      <p class="modal-lede">You've used today's free calculations. The unlimited plan removes the cap and keeps every rate and agreement included.</p>
+      <h2 id="pricingTitle">Go unlimited (fair use) for ₹99<span>/month</span></h2>
+      <p class="modal-lede">You've used today's free calculations. The paid plan removes the cap under a fair-use policy. Payments are not open yet — join the waitlist below.</p>
       <div class="price modal-price"><span>₹</span>99<small>/month</small></div>
       <ul class="tick-list">
-        <li>Unlimited calculations, every day</li>
+        <li>Unlimited (fair use) calculations, every day</li>
         <li>All 14,416 HSN codes</li>
         <li>20 trade agreements and 78 countries</li>
         <li>Preference vs MFN comparison</li>
@@ -323,12 +387,12 @@
         </div>
         <p class="hint" id="notifyStatus" role="status"></p>
       </form>
-      <p class="modal-fine">No payment is collected in this version. The ₹99/month plan will be activated after launch.</p>
+      <p class="modal-fine">Payments are not open yet. No payment is collected in this version; the ₹99/month plan will be activated manually after launch.</p>
     </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script type="module" src="assets/app.js"></script>
+  <script type="module" src="assets/app.js?v=3"></script>
 </body>
 </html>

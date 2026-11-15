@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API documentation — CustomsCalc</title>
+  <meta name="description" content="Query India import duty rates from your own application. HSN lookup, BCD, IGST, SWS and FTA rates with a hashed API key. 10 free billable calls per month.">
+  <meta name="theme-color" content="#0b1f3a">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://customs.vijayebhava.com/api-docs/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="CustomsCalc">
+  <meta property="og:title" content="CustomsCalc API — India duty rates for your application">
+  <meta property="og:description" content="REST API for HSN rates, BCD, IGST, SWS, FTA preferences and landed cost. 10 free billable calls per month.">
+  <meta property="og:url" content="https://customs.vijayebhava.com/api-docs/">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/assets/styles.css?v=3">
+</head>
+<body class="docs-body">
+  <a class="skip-link" href="#get-key">Skip to API key signup</a>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="/" aria-label="CustomsCalc home">
+        <span class="brand-mark" aria-hidden="true">₹</span>
+        <span class="brand-name">Customs<span>Calc</span></span>
+        <span class="brand-tag">India</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="/">Calculator</a>
+        <a href="#endpoints">Endpoints</a>
+        <a href="#plans">Plans</a>
+        <a href="#errors">Errors</a>
+        <a class="btn btn-primary btn-sm" href="#get-key">Get an API key</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="docs-hero">
+      <div class="wrap docs-hero-grid">
+        <div>
+          <p class="eyebrow">CustomsCalc API · v1</p>
+          <h1>Indian duty rates,<br><em>inside your application.</em></h1>
+          <p class="lede">
+            One REST API for 14,416 eight-digit HSN lines: BCD, SWS, AIDC, cess,
+            IGST and preferential rates under 20 trade agreements. Search is free;
+            rate lookups and calculations use a monthly quota.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#get-key">Create a free key</a>
+            <a class="btn btn-outline" href="#quickstart">Quickstart</a>
+          </div>
+          <ul class="hero-stats" aria-label="API facts">
+            <li><strong>10</strong><span>free calls / month</span></li>
+            <li><strong>20</strong><span>trade agreements</span></li>
+            <li><strong>JSON</strong><span>REST + CORS</span></li>
+          </ul>
+        </div>
+
+        <aside class="key-card" id="get-key">
+          <div class="key-card-head">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="key-card-file">create-key.sh</span>
+          </div>
+          <form id="signupForm" class="key-form" novalidate>
+            <label class="field-label" for="signupEmail">Work email</label>
+            <input class="input" id="signupEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@company.com" required>
+            <button class="btn btn-primary btn-block" id="signupBtn" type="submit">Create my free API key</button>
+            <p class="hint">One key per email. The key is shown once and stored only as a SHA-256 hash.</p>
+            <p class="form-status" id="signupStatus" role="status" aria-live="polite"></p>
+          </form>
+          <div class="key-result" id="keyResult" hidden>
+            <span class="key-result-label">Your API key — copy it now</span>
+            <div class="key-value">
+              <code id="keyValue"></code>
+              <button class="btn btn-outline btn-sm" id="copyKey" type="button">Copy</button>
+            </div>
+            <p class="hint">This is the only time the key is displayed. Keep it out of client-side code and public repositories.</p>
+          </div>
+          <div class="key-card-foot">
+            <span class="pill pill-good">No card required</span>
+            <span class="pill">10 billable calls / month</span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <div class="docs-layout wrap">
+      <aside class="docs-sidebar" aria-label="Documentation contents">
+        <p class="docs-sidebar-title">On this page</p>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#auth">Authentication</a>
+        <a href="#endpoints">Endpoints</a>
+        <a href="#calculate">Calculate</a>
+        <a href="#search">Search</a>
+        <a href="#responses">Responses</a>
+        <a href="#plans">Quota and plans</a>
+        <a href="#errors">Errors</a>
+        <a href="#coverage">Data coverage</a>
+        <a href="#rules">Rules and limits</a>
+      </aside>
+
+      <div class="docs-main">
+        <section id="quickstart" class="docs-section">
+          <p class="eyebrow">Quickstart</p>
+          <h2>Your first request in a minute</h2>
+          <ol class="docs-steps">
+            <li>Create a free key above. It starts with <code>cc_live_</code>.</li>
+            <li>Send it in an <code>Authorization: Bearer</code> header on every request.</li>
+            <li>Call <code>GET /api/v1/hsn/85171300</code> for a rate stack, or <code>POST /api/v1/calculate</code> for landed cost.</li>
+          </ol>
+
+          <div class="code-block">
+            <div class="code-block-head"><span>Shell</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>export CUSTOMS_API_KEY="cc_live_your_key_here"
+
+curl "https://customs.vijayebhava.com/api/v1/hsn/85171300" \
+  -H "Authorization: Bearer $CUSTOMS_API_KEY"</code></pre>
+          </div>
+
+          <div class="callout">
+            <strong>Base URL</strong>
+            <code>https://customs.vijayebhava.com</code>. All API responses are JSON and are sent with
+            <code>Cache-Control: no-store</code>. CORS is open so browser clients can call the API
+            directly, but never embed a key in a public web page.
+          </div>
+        </section>
+
+        <section id="auth" class="docs-section">
+          <p class="eyebrow">Authentication</p>
+          <h2>Hashed keys, bearer auth</h2>
+          <p>
+            Keys are generated once, stored as a SHA-256 hash, and never returned again.
+            Send the plaintext key on every request using either header:
+          </p>
+          <div class="code-block">
+            <div class="code-block-head"><span>HTTP headers</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>Authorization: Bearer cc_live_xxxxxxxxxxxxxxxxxxxxxxxx
+# or
+X-API-Key: cc_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
+          </div>
+          <p>
+            A missing or unknown key returns <code>401 missing_api_key</code> or
+            <code>401 invalid_api_key</code>. A revoked key returns <code>403 key_disabled</code>.
+            Keys are rate-limited per minute as well as monthly.
+          </p>
+        </section>
+
+        <section id="endpoints" class="docs-section">
+          <p class="eyebrow">Endpoints</p>
+          <h2>Reference</h2>
+          <div class="endpoint-table-wrap">
+            <table class="docs-table">
+              <thead>
+                <tr><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Quota</th><th scope="col">Purpose</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="method get">GET</span></td><td><code>/api/v1/hsn/{code}</code></td><td>1 call</td><td>Rate stack and preferential rates for an 8-digit code</td></tr>
+                <tr><td><span class="method post">POST</span></td><td><code>/api/v1/calculate</code></td><td>1 call</td><td>Landed cost for an HSN, origin and CIF value</td></tr>
+                <tr><td><span class="method get">GET</span></td><td><code>/api/v1/search?q=</code></td><td>Free</td><td>Code + description only, no rates</td></tr>
+                <tr><td><span class="method get">GET</span></td><td><code>/api/v1/meta</code></td><td>Free</td><td>Dataset version, agreements and countries</td></tr>
+                <tr><td><span class="method get">GET</span></td><td><code>/api/v1/usage</code></td><td>Free</td><td>Current month's usage and reset date</td></tr>
+                <tr><td><span class="method post">POST</span></td><td><code>/api/v1/signup</code></td><td>Free</td><td>Create a key from an email address</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="docs-fine">Search results never include duty rates. Only a lookup or calculation returns rates and consumes quota.</p>
+        </section>
+
+        <section id="hsn" class="docs-section">
+          <p class="eyebrow">GET /api/v1/hsn/{code}</p>
+          <h2>One tariff line</h2>
+          <p>
+            Returns statutory and effective BCD, SWS as a percentage of BCD, AIDC,
+            cess, IGST and the rate for each agreement column. The code must be the
+            full 8 digits.
+          </p>
+          <div class="code-block">
+            <div class="code-block-head"><span>Request</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>curl "https://customs.vijayebhava.com/api/v1/hsn/85171300" \
+  -H "Authorization: Bearer $CUSTOMS_API_KEY"</code></pre>
+          </div>
+          <div class="code-block">
+            <div class="code-block-head"><span>200 response (abridged)</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>{
+  "data": {
+    "hsn": "85171300",
+    "description": "Smartphones",
+    "chapter": 85,
+    "rates": {
+      "bcdStatutory": 20,
+      "bcdEffective": 15,
+      "aidc": 0,
+      "swsOfBcd": 10,
+      "igst": 18,
+      "cess": 0
+    },
+    "preferentialRates": {
+      "MFN": 15,
+      "AIFTA": 0,
+      "UAE_CEPA": 15,
+      "Japan_CEPA": 0,
+      "Korea_CEPA": 0,
+      "Australia_ECTA": 0
+    },
+    "flag": 0,
+    "flagLabel": "Line-level CBIC rate",
+    "quota": {
+      "plan": "free",
+      "limit": 10,
+      "used": 1,
+      "remaining": 9,
+      "period": "2026-11",
+      "resetsOn": "2026-12-01"
+    }
+  },
+  "meta": { "indicative": true }
+}</code></pre>
+          </div>
+          <p class="docs-fine">
+            <code>preferentialRates</code> contains every modelled agreement. The
+            <code>MFN</code> value repeats <code>rates.bcdEffective</code>. AIDC is
+            populated only for gold and silver; anti-dumping and safeguard duties are excluded.
+          </p>
+        </section>
+
+        <section id="calculate" class="docs-section">
+          <p class="eyebrow">POST /api/v1/calculate</p>
+          <h2>Landed cost</h2>
+          <p>
+            Send <code>hsn</code> plus the customs value build-up, and an optional
+            <code>country</code>. The country can be a name such as
+            <code>Japan</code>, an ISO code such as <code>JPN</code>, an agreement
+            column such as <code>AIFTA</code>, or omitted for MFN.
+          </p>
+          <p>
+            The assessable value follows the bill-of-entry build-up:
+            <code>goodsValue + freight + insurance + otherCharges</code>.
+            Send the invoice or FOB price as <code>goodsValue</code>; add only
+            amounts that are includible in the customs value (freight to India,
+            marine insurance, landing, packing, commissions, etc.). BCD, SWS,
+            AIDC, cess and IGST are then applied to the resulting assessable value.
+          </p>
+          <p>
+            The legacy <code>cif</code> field is still accepted and is treated as
+            the assessable value directly when no charge fields are sent. Do not
+            send <code>cif</code> together with charge fields — use
+            <code>goodsValue</code> instead.
+          </p>
+          <div class="code-block">
+            <div class="code-block-head"><span>Request</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>curl -X POST "https://customs.vijayebhava.com/api/v1/calculate" \
+  -H "Authorization: Bearer $CUSTOMS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"hsn":"85171300","country":"Japan","goodsValue":100000,"freight":5000,"insurance":1000,"otherCharges":500}'</code></pre>
+          </div>
+          <div class="code-block">
+            <div class="code-block-head"><span>200 response</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>{
+  "data": {
+    "hsn": "85171300",
+    "description": "Smartphones",
+    "origin": {
+      "country": "Japan",
+      "iso": "JPN",
+      "agreement": "Japan_CEPA",
+      "agreementName": "India-Japan CEPA",
+      "modelled": true
+    },
+    "valuation": {
+      "goodsValue": 100000,
+      "freight": 5000,
+      "insurance": 1000,
+      "otherCharges": 500,
+      "chargesTotal": 6500,
+      "assessableValue": 106500
+    },
+    "cif": 106500,
+    "dataAsOf": "2025-06-30",
+    "rates": {
+      "bcdStatutory": 20,
+      "bcdEffective": 15,
+      "appliedBcd": 0,
+      "preferential": 0,
+      "swsOfBcd": 10,
+      "igst": 18,
+      "aidc": 0,
+      "cess": 0
+    },
+    "amounts": {
+      "bcd": 0,
+      "sws": 0,
+      "aidc": 0,
+      "cess": 0,
+      "dutyBeforeIgst": 0,
+      "igst": 19170,
+      "totalDuty": 19170,
+      "landedCost": 125670
+    },
+    "effectiveDutyPct": 18,
+    "dutyExclIgstPct": 0,
+    "prefApplied": true,
+    "prefSaving": 20735.55,
+    "mfnLandedCost": 146405.55,
+    "flag": 0,
+    "flagLabel": "Line-level CBIC rate",
+    "quota": { "plan": "free", "limit": 10, "used": 2, "remaining": 8, "period": "2026-11", "resetsOn": "2026-12-01" }
+  },
+  "meta": { "indicative": true }
+}</code></pre>
+          </div>
+
+          <div class="code-block">
+            <div class="code-block-head"><span>JavaScript</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>const res = await fetch("https://customs.vijayebhava.com/api/v1/calculate", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.CUSTOMS_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    hsn: "85171300",
+    country: "Japan",
+    goodsValue: 100000,
+    freight: 5000,
+    insurance: 1000,
+    otherCharges: 500,
+  }),
+});
+
+const { data, error } = await res.json();
+if (error) throw new Error(`${error.code}: ${error.message}`);
+console.log(data.valuation.assessableValue, data.amounts.landedCost);</code></pre>
+          </div>
+
+          <div class="code-block">
+            <div class="code-block-head"><span>Python</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>import os
+import requests
+
+res = requests.post(
+    "https://customs.vijayebhava.com/api/v1/calculate",
+    headers={"Authorization": f"Bearer {os.environ['CUSTOMS_API_KEY']}"},
+    json={
+        "hsn": "85171300",
+        "country": "Japan",
+        "goodsValue": 100000,
+        "freight": 5000,
+        "insurance": 1000,
+        "otherCharges": 500,
+    },
+    timeout=15,
+)
+res.raise_for_status()
+data = res.json()["data"]
+print(data["valuation"]["assessableValue"], data["amounts"]["landedCost"])</code></pre>
+          </div>
+        </section>
+
+        <section id="search" class="docs-section">
+          <p class="eyebrow">GET /api/v1/search</p>
+          <h2>Find a code without spending quota</h2>
+          <p>
+            Search by 2–8 digit code prefix or by words in the description. It
+            returns at most 25 results and never includes rates, so lookup is free
+            for every signed-in key.
+          </p>
+          <div class="code-block">
+            <div class="code-block-head"><span>Request</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>curl "https://customs.vijayebhava.com/api/v1/search?q=smartphone&amp;limit=5" \
+  -H "Authorization: Bearer $CUSTOMS_API_KEY"</code></pre>
+          </div>
+          <div class="code-block">
+            <div class="code-block-head"><span>200 response</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>{
+  "data": {
+    "query": "smartphone",
+    "results": [
+      { "code": "85171300", "description": "Smartphones" }
+    ]
+  },
+  "meta": { "count": 1, "note": "Search is free and does not use quota." }
+}</code></pre>
+          </div>
+        </section>
+
+        <section id="responses" class="docs-section">
+          <p class="eyebrow">Conventions</p>
+          <h2>Response shape and units</h2>
+          <ul class="docs-list">
+            <li>Every success response wraps its payload in <code>data</code>; optional context lives in <code>meta</code>.</li>
+            <li>Rates are percentages, not fractions. <code>15</code> means 15%.</li>
+            <li>All money amounts are Indian rupees, rounded to two decimals.</li>
+            <li><code>goodsValue</code> must be greater than zero. <code>freight</code>, <code>insurance</code> and <code>otherCharges</code> are optional and default to zero.</li>
+            <li><code>valuation.assessableValue</code> is the CIF value used for BCD, SWS, AIDC, cess and IGST. <code>cif</code> repeats it for compatibility.</li>
+            <li><code>amounts.dutyBeforeIgst</code> is BCD + SWS + AIDC + cess; <code>amounts.totalDuty</code> is the total payable to customs including IGST.</li>
+            <li>The legacy <code>cif</code> field is accepted as a direct assessable value when no charge fields are sent.</li>
+            <li>Every billable response includes a <code>quota</code> object with <code>limit</code>, <code>used</code>, <code>remaining</code>, <code>period</code> and <code>resetsOn</code>.</li>
+          </ul>
+        </section>
+
+        <section id="plans" class="docs-section">
+          <p class="eyebrow">Quota and plans</p>
+          <h2>10 calls free every month</h2>
+          <div class="plan-grid">
+            <article class="plan-card">
+              <span class="pill">Free</span>
+              <div class="plan-price">₹0</div>
+              <ul class="tick-list">
+                <li>10 billable calls per IST calendar month</li>
+                <li>Unlimited free HSN search</li>
+                <li>All 14,416 lines and 20 agreements</li>
+                <li>Resets on the 1st at midnight IST</li>
+              </ul>
+            </article>
+            <article class="plan-card plan-card-paid">
+              <span class="pill pill-accent">Paid · ₹99/month</span>
+              <div class="plan-price">Unlimited<small>fair use</small></div>
+              <ul class="tick-list">
+                <li>No monthly cap for normal workloads</li>
+                <li>Higher per-minute limits</li>
+                <li>Same endpoints and response format</li>
+                <li>Activation is handled manually after launch</li>
+              </ul>
+            </article>
+          </div>
+          <p class="docs-fine">
+            A rate lookup (<code>/hsn</code>) and a calculation each count as one
+            billable call. Search, metadata and usage checks are always free.
+            The website calculator has a separate limit of five calculations per
+            day, tracked by an anonymous cookie and IP.
+          </p>
+        </section>
+
+        <section id="errors" class="docs-section">
+          <p class="eyebrow">Errors</p>
+          <h2>JSON errors, stable codes</h2>
+          <p>Failures use an envelope with a machine-readable code and a human message:</p>
+          <div class="code-block">
+            <div class="code-block-head"><span>429 response</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>{
+  "error": {
+    "code": "quota_exceeded",
+    "message": "The free API plan includes 10 billable calls per month. Upgrade to continue.",
+    "docs": "https://customs.vijayebhava.com/api-docs/",
+    "plan": "free",
+    "limit": 10,
+    "used": 10,
+    "period": "2026-11",
+    "resetsOn": "2026-12-01"
+  }
+}</code></pre>
+          </div>
+          <div class="endpoint-table-wrap">
+            <table class="docs-table">
+              <thead><tr><th scope="col">Status</th><th scope="col">Code</th><th scope="col">Meaning</th></tr></thead>
+              <tbody>
+                <tr><td>400</td><td><code>invalid_hsn</code></td><td>Code is not exactly 8 digits</td></tr>
+                <tr><td>400</td><td><code>invalid_cif</code></td><td>Legacy assessable value missing, zero or not a number</td></tr>
+                <tr><td>400</td><td><code>missing_goods_value</code></td><td>Charges were sent without an invoice value</td></tr>
+                <tr><td>400</td><td><code>invalid_charge</code></td><td>Freight, insurance or other charges are negative or not a number</td></tr>
+                <tr><td>400</td><td><code>invalid_query</code></td><td>Search term shorter than 2 or longer than 80 characters</td></tr>
+                <tr><td>400</td><td><code>unknown_origin</code></td><td>Country or agreement is not mapped</td></tr>
+                <tr><td>401</td><td><code>missing_api_key</code> / <code>invalid_api_key</code></td><td>No key or an unrecognised key</td></tr>
+                <tr><td>403</td><td><code>key_disabled</code></td><td>Key was revoked</td></tr>
+                <tr><td>404</td><td><code>hsn_not_found</code></td><td>Code is not in the dataset</td></tr>
+                <tr><td>409</td><td><code>email_registered</code></td><td>That email already has a key</td></tr>
+                <tr><td>413</td><td><code>payload_too_large</code></td><td>Body is over 8 KB</td></tr>
+                <tr><td>429</td><td><code>quota_exceeded</code></td><td>Monthly billable calls used up</td></tr>
+                <tr><td>429</td><td><code>rate_limited</code></td><td>Too many requests in a short window</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="coverage" class="docs-section">
+          <p class="eyebrow">Data coverage</p>
+          <h2>What the numbers include</h2>
+          <ul class="docs-list">
+            <li>11,906 of 14,416 codes carry a line-level statutory BCD from the CBIC working-tariff PDFs as on 30.06.2025. The rest are dataset-only and flagged.</li>
+            <li>144 compound or specific-duty parses are approximate and flagged.</li>
+            <li>Effective BCD differs from statutory BCD only on curated high-volume lines.</li>
+            <li>AIDC is populated only for gold and silver.</li>
+            <li>Mauritius, Chile, Mercosur, APTA and GSTP are limited PTAs shown at MFN.</li>
+            <li>The UAE CEPA column uses 533 curated line-level rates.</li>
+          </ul>
+          <p class="docs-fine">
+            Rates are indicative and not legal or customs advice. Anti-dumping duty,
+            safeguard duty, tariff-rate quotas, specific duties, valuation
+            adjustments and origin verification are excluded. Confirm every rate on
+            ICEGATE before filing a Bill of Entry.
+          </p>
+        </section>
+
+        <section id="rules" class="docs-section">
+          <p class="eyebrow">Rules and limits</p>
+          <h2>Fair use</h2>
+          <ul class="docs-list">
+            <li>One key per email. Signup is limited to three keys per IP per day.</li>
+            <li>Search is capped at 300 requests per hour per key and 25 results per request.</li>
+            <li>Lookups are capped at 120 per minute and calculations at 60 per minute.</li>
+            <li>Do not resell the raw dataset, bulk-download descriptions, or share a key between unrelated applications.</li>
+            <li>Keys can be revoked or rotated by the operator at any time.</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <a class="brand brand-footer" href="/">
+          <span class="brand-mark" aria-hidden="true">₹</span>
+          <span class="brand-name">Customs<span>Calc</span></span>
+        </a>
+        <p class="footer-note">India import duty and landed-cost estimates. Not legal or customs advice.</p>
+      </div>
+      <div class="footer-links">
+        <a href="/">Calculator</a>
+        <a href="/api-docs/">API docs</a>
+        <a href="/privacy/">Privacy</a>
+        <a href="/terms/">Terms</a>
+        <a href="mailto:support@vijayebhava.com">Support</a>
+      </div>
+    </div>
+    <div class="wrap footer-bottom">
+      <span>© <span id="year"></span> CustomsCalc</span>
+      <span>Rates are indicative · verify on ICEGATE</span>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/assets/docs.js?v=3"></script>
+</body>
+</html>

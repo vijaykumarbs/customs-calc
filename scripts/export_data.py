@@ -18,7 +18,7 @@ import openpyxl
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_MASTER = os.path.join(APP_DIR, "data-source", "HSN_BCD_Master.csv")
 DEFAULT_WORKBOOK = os.path.join(APP_DIR, "data-source", "India_BCD_FTA_Master_v1.1.xlsx")
-OUT_DIR = os.path.join(APP_DIR, "web", "data")
+OUT_DIR = os.path.join(APP_DIR, "data")
 
 
 def load_master(path):
@@ -121,6 +121,7 @@ def main():
 
     meta = {
         "generated": dt.date.today().isoformat(),
+        "data_as_of": "2025-06-30",
         "version": "1.1",
         "line_count": len(rows),
         "agreements": agreements,

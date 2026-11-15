@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy policy — CustomsCalc</title>
+  <meta name="description" content="How CustomsCalc handles anonymous cookies, calculation logs, API keys and waitlist email addresses.">
+  <meta name="theme-color" content="#0b1f3a">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://customs.vijayebhava.com/privacy/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css?v=3">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="/" aria-label="CustomsCalc home">
+        <span class="brand-mark" aria-hidden="true">₹</span>
+        <span class="brand-name">Customs<span>Calc</span></span>
+        <span class="brand-tag">India</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="/">Calculator</a>
+        <a href="/api-docs/">API docs</a>
+        <a href="/terms/">Terms</a>
+        <a href="/privacy/">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="legal-main" id="main">
+    <div class="wrap legal-wrap">
+      <p class="eyebrow">Legal</p>
+      <h1>Privacy policy</h1>
+      <p class="legal-meta">Last updated: 15 November 2026</p>
+
+      <p>
+        CustomsCalc is an indicative India import duty and landed-cost calculator. This page
+        explains what the service stores, why, and the choices you have. It covers the website
+        at <a href="https://customs.vijayebhava.com">customs.vijayebhava.com</a> and the REST API
+        published on the same domain.
+      </p>
+
+      <h2>What we collect</h2>
+      <ul>
+        <li>
+          <strong>An anonymous website cookie.</strong> The calculator sets a first-party,
+          HTTP-only cookie named <code>cc_client</code> containing a random identifier. It is
+          used only to count the five free calculations per Indian calendar day. It does not
+          contain your name, email or payment details.
+        </li>
+        <li>
+          <strong>A hashed IP address.</strong> We hash the connecting IP address to apply
+          abuse rate limits and a daily per-connection backstop. The raw IP is not stored in
+          the application database.
+        </li>
+        <li>
+          <strong>Calculation records.</strong> For quota and abuse prevention we store the
+          anonymous client identifier, HSN code, origin, assessable value, total duty, and a
+          timestamp. These records are not linked to a name.
+        </li>
+        <li>
+          <strong>Email addresses.</strong> If you join the paid-plan waitlist or create an API
+          key, we store the email address you submit. API keys are stored only as a SHA-256
+          hash; the plaintext key is shown once and cannot be recovered.
+        </li>
+        <li>
+          <strong>Standard server logs.</strong> Cloudflare, our hosting and CDN provider,
+          processes request metadata such as IP address, user agent, path and timestamp as part
+          of delivering and protecting the service.
+        </li>
+      </ul>
+
+      <h2>How we use it</h2>
+      <ul>
+        <li>To provide the calculator, API and quota counters.</li>
+        <li>To prevent abuse, brute-force key guessing and quota evasion.</li>
+        <li>To reply about API access and the paid plan.</li>
+        <li>To understand aggregate usage and keep the service reliable.</li>
+      </ul>
+      <p>
+        We do not sell personal data, run third-party advertising, or use cross-site tracking
+        cookies. Search terms and calculation inputs are not used to build advertising profiles.
+      </p>
+
+      <h2>Cookies</h2>
+      <p>
+        The only application cookie is the anonymous <code>cc_client</code> identifier described
+        above. It is essential to the free-calculation quota. You can clear it in your browser;
+        clearing it starts a new anonymous session, subject to the per-IP abuse backstop.
+      </p>
+
+      <h2>Sharing and processors</h2>
+      <p>
+        The service runs on Cloudflare Pages and Cloudflare D1. Cloudflare processes data on our
+        behalf to host the site, run the Worker, store the database and protect the service. We
+        may disclose information if required by law or to protect the service from abuse.
+      </p>
+
+      <h2>Retention</h2>
+      <ul>
+        <li>Anonymous quota counters: retained for the current and recent quota periods.</li>
+        <li>Calculation records: retained for up to 12 months for abuse review, then deleted.</li>
+        <li>Waitlist and API account emails: retained until you ask us to delete them or the account is closed.</li>
+        <li>Hashed API keys: retained until revoked.</li>
+      </ul>
+
+      <h2>Your choices</h2>
+      <p>
+        You can ask for a copy of the email address and API account details we hold, or ask us
+        to delete them, by emailing
+        <a href="mailto:privacy@vijayebhava.com">privacy@vijayebhava.com</a>. Because the
+        website identifier is anonymous, we cannot link it to you unless you tell us the value.
+        Deleting an API key immediately disables it.
+      </p>
+
+      <h2>Children</h2>
+      <p>
+        The service is intended for businesses and professionals. It is not directed at children
+        under 18, and we do not knowingly collect their personal data.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        We may update this policy as the service changes. The updated date at the top of this
+        page will change when we do. Material changes affecting API customers will be announced
+        by email where we have an address.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Privacy questions: <a href="mailto:privacy@vijayebhava.com">privacy@vijayebhava.com</a>.
+        General and API questions: <a href="/api-docs/">the API documentation</a>.
+      </p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <a class="brand brand-footer" href="/">
+          <span class="brand-mark" aria-hidden="true">₹</span>
+          <span class="brand-name">Customs<span>Calc</span></span>
+        </a>
+        <p class="footer-note">India import duty and landed-cost estimates. Not legal or customs advice.</p>
+      </div>
+      <div class="footer-links">
+        <a href="/">Calculator</a>
+        <a href="/api-docs/">API docs</a>
+        <a href="/terms/">Terms</a>
+        <a href="/privacy/">Privacy</a>
+      </div>
+    </div>
+    <div class="wrap footer-bottom">
+      <span>© 2026 CustomsCalc</span>
+      <span>Rates are indicative · verify on ICEGATE</span>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import {
+  computeAssessableValue,
   computeDuty,
   ftaColumnIndex,
   istDayKey,
@@ -15,8 +16,8 @@ import {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const vectors = JSON.parse(readFileSync(join(root, "tests/vectors.json"), "utf8"));
-const rows = JSON.parse(readFileSync(join(root, "web/data/hsn.json"), "utf8"));
-const fta = JSON.parse(readFileSync(join(root, "web/data/fta.json"), "utf8"));
+const rows = JSON.parse(readFileSync(join(root, "data/hsn.json"), "utf8"));
+const fta = JSON.parse(readFileSync(join(root, "data/fta.json"), "utf8"));
 
 test("duty vectors match the recorded expectations", () => {
   for (const vector of vectors) {
@@ -51,6 +52,62 @@ test("rejects invalid assessable values", () => {
   assert.throws(() => computeDuty({ cif: 0, row }), RangeError);
   assert.throws(() => computeDuty({ cif: -5, row }), RangeError);
   assert.throws(() => computeDuty({ cif: Number.NaN, row }), RangeError);
+});
+
+test("assessable value adds freight, insurance and other charges", () => {
+  const valuation = computeAssessableValue({
+    goodsValue: 100000,
+    freight: 5000,
+    insurance: 1000,
+    otherCharges: 500,
+  });
+  assert.deepEqual(valuation, {
+    goodsValue: 100000,
+    freight: 5000,
+    insurance: 1000,
+    otherCharges: 500,
+    chargesTotal: 6500,
+    assessableValue: 106500,
+  });
+});
+
+test("assessable value defaults charges to zero", () => {
+  const valuation = computeAssessableValue({ goodsValue: 250000 });
+  assert.equal(valuation.chargesTotal, 0);
+  assert.equal(valuation.assessableValue, 250000);
+  assert.equal(valuation.freight, 0);
+  assert.equal(valuation.insurance, 0);
+  assert.equal(valuation.otherCharges, 0);
+});
+
+test("assessable value rejects missing, non-positive and negative inputs", () => {
+  assert.throws(() => computeAssessableValue({ goodsValue: 0 }), RangeError);
+  assert.throws(() => computeAssessableValue({ goodsValue: -1 }), RangeError);
+  assert.throws(() => computeAssessableValue({}), RangeError);
+  assert.throws(
+    () => computeAssessableValue({ goodsValue: 1000, freight: -1 }),
+    RangeError,
+  );
+  assert.throws(
+    () => computeAssessableValue({ goodsValue: 1000, insurance: -0.01 }),
+    RangeError,
+  );
+});
+
+test("duty stack runs on the built-up assessable value", () => {
+  const row = rows.find((r) => r[0] === "85171300");
+  const valuation = computeAssessableValue({
+    goodsValue: 100000,
+    freight: 5000,
+    insurance: 1000,
+    otherCharges: 500,
+  });
+  const result = computeDuty({ cif: valuation.assessableValue, row, ftaRate: 0 });
+  assert.equal(result.cif, 106500);
+  assert.equal(result.bcd, 0);
+  assert.equal(result.igst, 19170);
+  assert.equal(result.totalDuty, 19170);
+  assert.equal(result.landedCost, 125670);
 });
 
 test("agreement columns resolve to the FTA matrix", () => {

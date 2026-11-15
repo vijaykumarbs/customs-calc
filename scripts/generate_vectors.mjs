@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { computeDuty } from "../web/assets/duty.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const rows = JSON.parse(readFileSync(join(root, "web/data/hsn.json"), "utf8"));
+const rows = JSON.parse(readFileSync(join(root, "data/hsn.json"), "utf8"));
 const byCode = new Map(rows.map((row) => [row[0], row]));
 
 const cases = [

@@ -24,6 +24,37 @@ def round2(value: float) -> float:
     return math.floor((value + EPSILON) * 100 + 0.5) / 100
 
 
+def compute_assessable_value(
+    goods_value: float,
+    freight: float = 0,
+    insurance: float = 0,
+    other_charges: float = 0,
+) -> dict[str, float]:
+    """Build the CIF assessable value from invoice value and includible costs."""
+    goods = float(goods_value)
+    if not math.isfinite(goods) or goods <= 0:
+        raise ValueError("goods_value must be > 0")
+    charges = []
+    for label, value in (
+        ("freight", freight),
+        ("insurance", insurance),
+        ("other_charges", other_charges),
+    ):
+        number = float(value or 0)
+        if not math.isfinite(number) or number < 0:
+            raise ValueError(f"{label} must be >= 0")
+        charges.append(round2(number))
+    charges_total = round2(sum(charges))
+    return {
+        "goodsValue": round2(goods),
+        "freight": charges[0],
+        "insurance": charges[1],
+        "otherCharges": charges[2],
+        "chargesTotal": charges_total,
+        "assessableValue": round2(round2(goods) + charges_total),
+    }
+
+
 def _stack(
     cif: float,
     bcd_rate: float,

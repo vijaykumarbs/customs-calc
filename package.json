@@ -1,11 +1,14 @@
 {
   "name": "customscalc",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "India import duty and landed-cost calculator built on the BCD/FTA master data.",
+  "description": "India import duty and landed-cost calculator with a Cloudflare Pages API and D1-backed tariff data.",
   "scripts": {
-    "serve": "python3 -m http.server 8080 --directory web",
+    "serve": "wrangler pages dev web --port 8788",
+    "seed": "node scripts/build_seed.mjs",
+    "db:local": "wrangler d1 execute customs-calc --local --file=data/schema.sql && wrangler d1 execute customs-calc --local --file=data/seed.sql",
+    "db:remote": "wrangler d1 execute customs-calc --remote --file=data/schema.sql && wrangler d1 execute customs-calc --remote --file=data/seed.sql",
     "test": "node --test tests/duty.test.mjs",
     "test:python": "python3 -m unittest discover -s tests -p 'test_*.py'",
     "vectors": "node scripts/generate_vectors.mjs",
