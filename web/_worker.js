@@ -569,18 +569,28 @@ function preferentialMap(meta, rateRow) {
 
 /* ----------------------------------------------------------------- quota --- */
 
-async function reserveApiQuota(env, key, meta) {
+async function reserveApiQuotaCount(env, key, meta, count) {
   const limit = key.plan === "paid"
     ? PAID_MONTHLY_LIMIT
     : Number(meta.free_api_monthly_limit || API_FREE_MONTHLY_LIMIT);
   const period = istMonthKey();
-  const row = await env.DB.prepare(
-    `INSERT INTO api_usage (key_id, period, used) VALUES (?, ?, 1)
-     ON CONFLICT(key_id, period) DO UPDATE SET used = api_usage.used + 1
-       WHERE api_usage.used < ?
-     RETURNING used`,
+  const amount = Math.max(1, Math.floor(Number(count) || 1));
+
+  // Make sure the row exists, then increment it only if the whole batch fits.
+  // The conditional UPDATE is atomic, so concurrent requests cannot overshoot.
+  await env.DB.prepare(
+    `INSERT INTO api_usage (key_id, period, used) VALUES (?, ?, 0)
+     ON CONFLICT(key_id, period) DO NOTHING`,
   )
-    .bind(key.id, period, limit)
+    .bind(key.id, period)
+    .run();
+
+  const row = await env.DB.prepare(
+    `UPDATE api_usage SET used = used + ?
+      WHERE key_id = ? AND period = ? AND used + ? <= ?
+      RETURNING used`,
+  )
+    .bind(amount, key.id, period, amount, limit)
     .first();
 
   if (!row) {
@@ -614,6 +624,10 @@ async function reserveApiQuota(env, key, meta) {
     period,
     resetsOn: nextIstMonthStart(),
   };
+}
+
+async function reserveApiQuota(env, key, meta) {
+  return reserveApiQuotaCount(env, key, meta, 1);
 }
 
 async function apiQuotaSnapshot(env, key, meta) {
@@ -802,6 +816,17 @@ async function handleV1(request, env, url, ctx) {
     return calculate(request, env, meta, key);
   }
 
+  if (url.pathname === "/api/v1/calculate/batch" && request.method === "POST") {
+    await enforceRateLimit(
+      env,
+      `v1-batch:${key.id}`,
+      10,
+      60,
+      "Too many batch requests this minute.",
+    );
+    return calculateBatch(request, env, meta, key);
+  }
+
   throw new ApiError(404, "not_found", "No such API endpoint.");
 }
 
@@ -902,6 +927,65 @@ async function calculate(request, env, meta, key) {
 
   return apiJson({
     data: buildQuoteData(result, origin, valuation, quota, meta),
+    meta: {
+      indicative: true,
+      disclaimer:
+        "Indicative only. Excludes anti-dumping, safeguard, TRQ, specific duties and origin verification. Verify on ICEGATE.",
+    },
+  });
+}
+
+async function calculateBatch(request, env, meta, key) {
+  const body = await readJsonBody(request);
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (items.length === 0 || items.length > 20) {
+    throw new ApiError(
+      400,
+      "invalid_batch",
+      "Send between 1 and 20 line items in the items array.",
+    );
+  }
+
+  const resolved = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new ApiError(400, "invalid_batch", `items[${i}] must be an object.`);
+    }
+    try {
+      const code = String(item.hsn ?? item.code ?? "").trim();
+      const valuation = valuationFromBody(item);
+      const origin = resolveOrigin(meta, item.country ?? item.origin ?? item.agreement);
+      const { row, rates } = await findHsn(env, code);
+      resolved.push({
+        valuation,
+        origin,
+        row,
+        ftaRate: ftaRateFor(meta, origin, rates),
+      });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        throw new ApiError(
+          err.status,
+          err.code,
+          `items[${i}]: ${err.message}`,
+          { ...err.extra, batch_index: i },
+        );
+      }
+      throw err;
+    }
+  }
+
+  const quota = await reserveApiQuotaCount(env, key, meta, resolved.length);
+  const results = resolved.map(({ valuation, origin, row, ftaRate }) => {
+    const result = computeDuty({ cif: valuation.assessableValue, row, ftaRate });
+    const data = buildQuoteData(result, origin, valuation, quota, meta);
+    delete data.quota;
+    return data;
+  });
+
+  return apiJson({
+    data: { count: results.length, quota, results },
     meta: {
       indicative: true,
       disclaimer:

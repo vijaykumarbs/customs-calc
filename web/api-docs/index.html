@@ -159,7 +159,8 @@ X-API-Key: cc_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
               </thead>
               <tbody>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/hsn/{code}</code></td><td>1 call</td><td>Rate stack and preferential rates for an 8-digit code</td></tr>
-                <tr><td><span class="method post">POST</span></td><td><code>/api/v1/calculate</code></td><td>1 call</td><td>Landed cost for an HSN, origin and CIF value</td></tr>
+                <tr><td><span class="method post">POST</span></td><td><code>/api/v1/calculate</code></td><td>1 call</td><td>Landed cost for one HSN and customs value build-up</td></tr>
+                <tr><td><span class="method post">POST</span></td><td><code>/api/v1/calculate/batch</code></td><td>1 call / line</td><td>Up to 20 lines in one request</td></tr>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/search?q=</code></td><td>Free</td><td>Code + description only, no rates</td></tr>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/meta</code></td><td>Free</td><td>Dataset version, agreements and countries</td></tr>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/usage</code></td><td>Free</td><td>Current month's usage and reset date</td></tr>
@@ -358,6 +359,43 @@ res.raise_for_status()
 data = res.json()["data"]
 print(data["valuation"]["assessableValue"], data["amounts"]["landedCost"])</code></pre>
           </div>
+        </section>
+
+        <section id="batch" class="docs-section">
+          <p class="eyebrow">POST /api/v1/calculate/batch</p>
+          <h2>Up to 20 lines in one call</h2>
+          <p>
+            Send an <code>items</code> array with the same fields as a single
+            calculation. Each line is validated first; the whole batch is rejected
+            with the failing index if any line is invalid. Quota is reserved for
+            every line atomically, so a batch either fits your remaining quota or
+            returns <code>429</code> without consuming any calls.
+          </p>
+          <div class="code-block">
+            <div class="code-block-head"><span>Request</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>curl -X POST "https://customs.vijayebhava.com/api/v1/calculate/batch" \
+  -H "Authorization: Bearer $CUSTOMS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"items":[
+    {"hsn":"85171300","country":"Japan","goodsValue":100000,"freight":5000,"insurance":1000,"otherCharges":500},
+    {"hsn":"85171300","country":"United Arab Emirates","goodsValue":50000}
+  ]}'</code></pre>
+          </div>
+          <div class="code-block">
+            <div class="code-block-head"><span>200 response</span><button class="code-copy" type="button" data-copy>Copy</button></div>
+            <pre><code>{
+  "data": {
+    "count": 2,
+    "quota": { "plan": "free", "limit": 10, "used": 4, "remaining": 6, "period": "2026-11", "resetsOn": "2026-12-01" },
+    "results": [
+      { "hsn": "85171300", "valuation": { "assessableValue": 106500 }, "amounts": { "totalDuty": 19170, "landedCost": 125670 } },
+      { "hsn": "85171300", "valuation": { "assessableValue": 50000 }, "amounts": { "totalDuty": 18735, "landedCost": 68735 } }
+    ]
+  },
+  "meta": { "indicative": true }
+}</code></pre>
+          </div>
+          <p class="docs-fine">Batch limit: 20 items. The request body must stay under 8 KB.</p>
         </section>
 
         <section id="search" class="docs-section">

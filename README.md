@@ -209,6 +209,7 @@ The plaintext key is returned once and stored only as a SHA-256 hash. Send it as
 |---|---|---|---|
 | `GET` | `/api/v1/hsn/{code}` | 1 call | Rate stack and preferential rates |
 | `POST` | `/api/v1/calculate` | 1 call | Landed cost |
+| `POST` | `/api/v1/calculate/batch` | 1 call / line | Up to 20 lines in one request |
 | `GET` | `/api/v1/search?q=` | Free | Code + description only |
 | `GET` | `/api/v1/meta` | Free | Dataset metadata |
 | `GET` | `/api/v1/usage` | Free | Monthly usage and reset date |
