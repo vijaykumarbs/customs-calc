@@ -32,10 +32,10 @@ in **Cloudflare D1**. The browser never downloads `hsn.json` or `fta.json`.
    with a copy-ready breakdown.
 5. **Website quota** — 5 calculations per Indian calendar day, enforced by the
    Worker with an anonymous `cc_client` cookie and a per-IP abuse backstop.
-6. **Public API** — self-serve keys, SHA-256 hashed at rest, 10 billable calls
+6. **Public API** — admin-issued keys, SHA-256 hashed at rest, 10 billable calls
    per IST month on the free plan, unlimited fair use on the paid plan.
-7. **API docs page** — auth, endpoints, examples, errors, limits and signup at
-   `/api-docs/`.
+7. **API docs page** — auth, endpoints, examples, errors, limits and the
+   early-access request form at `/api-docs/`.
 
 ## Architecture
 
@@ -65,11 +65,11 @@ customs-app/
 ├── web/                       Pages deployment directory
 │   ├── _worker.js             routing, auth, quota, D1 access
 │   ├── index.html             calculator
-│   ├── api-docs/index.html    API documentation + key signup
+│   ├── api-docs/index.html    API documentation + API access request
 │   ├── 404.html
 │   ├── assets/
 │   │   ├── app.js             calculator UI (talks to /api/site/*)
-│   │   ├── docs.js            docs copy buttons and signup form
+│   │   ├── docs.js            docs copy buttons and access form
 │   │   ├── duty.js            pure duty engine (Worker + Node tests)
 │   │   └── styles.css
 │   ├── _headers               CSP, frame and cache headers
@@ -195,13 +195,10 @@ a change in one that is not mirrored in the other fails the suite.
 
 Base URL: `https://customs.vijayebhava.com`
 
-Create a key from the docs page or directly:
-
-```bash
-curl -X POST https://customs.vijayebhava.com/api/v1/signup \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"you@company.com"}'
-```
+Keys are issued by hand while a verified email flow is being built. Join the
+early-access list on the docs page and we will issue a free key. Self-serve
+signup (`POST /api/v1/signup`) is closed and returns `403 signup_closed`; the
+admin API below is the only way to mint a key.
 
 The plaintext key is returned once and stored only as a SHA-256 hash. Send it as
 `Authorization: Bearer cc_live_...` or `X-API-Key: cc_live_...`.
@@ -214,7 +211,6 @@ The plaintext key is returned once and stored only as a SHA-256 hash. Send it as
 | `GET` | `/api/v1/search?q=` | Free | Code + description only |
 | `GET` | `/api/v1/meta` | Free | Dataset metadata |
 | `GET` | `/api/v1/usage` | Free | Monthly usage and reset date |
-| `POST` | `/api/v1/signup` | Free | Create a key |
 
 Example:
 
@@ -300,9 +296,10 @@ Paid activation is deliberately manual until a payment provider is connected.
   dataset cannot be bulk-downloaded through search.
 - API keys are random 32-byte values prefixed `cc_live_`, hashed with SHA-256
   before storage, and shown exactly once.
-- Signup is limited to 3 keys per hashed IP per day and one key per email.
-- Quota is reserved atomically in D1 before rates are returned, so concurrent
-  requests cannot exceed the monthly allowance.
+- Early-access requests are limited to 5 per hashed IP per day. Keys are issued
+  manually and limited to one per email.
+- Quota is reserved atomically in D1 after validation and computation, before
+  rates are returned, so concurrent requests cannot exceed the monthly allowance.
 - The website quota uses an HttpOnly cookie plus a 40/day IP backstop. A cookie
   reset bypasses the cookie count, so the IP limit caps casual abuse.
 - The Worker sets `Cache-Control: no-store` on every API response.
@@ -411,9 +408,8 @@ uvicorn backend.app:app --reload --port 8000
 ## Roadmap
 
 - Razorpay subscription in place of the notify form, with signed webhooks.
-- Email verification and self-serve key rotation.
+- Verified email signup and self-serve key rotation, replacing manual issuance.
 - Line-level schedules for the five limited PTAs and broader AIDC coverage.
-- Bulk/batch calculation endpoint for costing systems.
 - Saved shipments and printable costing sheets.
 
 ## Licence, data and privacy

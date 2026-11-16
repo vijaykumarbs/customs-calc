@@ -846,13 +846,19 @@ async function handleV1(request, env, url, ctx) {
         "POST /api/v1/calculate",
         "POST /api/v1/calculate/batch",
         "GET /api/v1/usage",
-        "POST /api/v1/signup",
       ],
     });
   }
 
-  if (url.pathname === "/api/v1/signup" && request.method === "POST") {
-    return signup(request, env);
+  if (url.pathname === "/api/v1/signup") {
+    // Self-serve signup is deliberately closed until there is a verified
+    // email flow and a self-serve rotation path. Keys are issued from the
+    // admin surface only; the docs page collects early-access requests.
+    throw new ApiError(
+      403,
+      "signup_closed",
+      "Self-serve signup is closed. Join the API early-access list on the API docs page.",
+    );
   }
 
   if (request.method !== "GET" && request.method !== "POST") {
@@ -1104,64 +1110,6 @@ async function calculateBatch(request, env, meta, key) {
   });
 }
 
-async function signup(request, env) {
-  const ip = await ipHash(request);
-  await enforceRateLimit(
-    env,
-    `signup:${ip}`,
-    3,
-    86400,
-    "Too many API keys requested from this address today.",
-  );
-  const body = await readJsonBody(request);
-  const email = normaliseEmail(body.email);
-
-  const existing = await env.DB.prepare(
-    "SELECT id, status FROM api_keys WHERE email = ? LIMIT 1",
-  )
-    .bind(email)
-    .first();
-  if (existing) {
-    throw new ApiError(
-      409,
-      "email_registered",
-      "That email already has an API key. Contact support to rotate or upgrade it.",
-    );
-  }
-
-  const plaintext = newApiKey();
-  const hash = await sha256Hex(plaintext);
-  const id = newId("key");
-  const now = new Date().toISOString();
-  await env.DB.prepare(
-    `INSERT INTO api_keys
-       (id, email, label, key_hash, key_prefix, plan, status, created_at)
-     VALUES (?, ?, ?, ?, ?, 'free', 'active', ?)`,
-  )
-    .bind(id, email, "Self-serve signup", hash, plaintext.slice(0, 16), now)
-    .run();
-  await env.DB.prepare(
-    "INSERT INTO signup_log (email, ip_hash, created_at) VALUES (?, ?, ?)",
-  )
-    .bind(email, ip, now)
-    .run();
-
-  return apiJson(
-    {
-      data: {
-        key: plaintext,
-        prefix: plaintext.slice(0, 16),
-        email,
-        plan: "free",
-        monthlyLimit: API_FREE_MONTHLY_LIMIT,
-        note: "Store this key now. It is hashed on our servers and cannot be shown again.",
-      },
-      links: { docs: "https://customs.vijayebhava.com/api-docs/" },
-    },
-    201,
-  );
-}
-
 /* -------------------------------------------------------------- site api --- */
 
 async function handleSite(request, env, url) {
@@ -1277,22 +1225,25 @@ async function handleSite(request, env, url) {
       `notify:${ip}`,
       5,
       86400,
-      "Too many signups from this address today.",
+      "Too many requests from this address today.",
     );
     const body = await readJsonBody(request);
     const email = normaliseEmail(body.email);
+    // Two early-access lists share the table: the paid-plan waitlist and the
+    // API key list. Untrusted input never picks an arbitrary source value.
+    const source = body.source === "api" ? "api" : "pricing";
     const now = new Date().toISOString();
     await env.DB.prepare(
-      `INSERT INTO waitlist (email, source, created_at) VALUES (?, 'pricing', ?)
+      `INSERT INTO waitlist (email, source, created_at) VALUES (?, ?, ?)
        ON CONFLICT(email) DO UPDATE SET created_at = excluded.created_at`,
     )
-      .bind(email, now)
+      .bind(email, source, now)
       .run();
-    return siteJson(
-      { data: { ok: true, message: "We'll write when the paid plan opens." } },
-      201,
-      client,
-    );
+    const message =
+      source === "api"
+        ? "You're on the API early-access list. We'll email you when your key is ready."
+        : "We'll write when the paid plan opens.";
+    return siteJson({ data: { ok: true, message } }, 201, client);
   }
 
   throw new ApiError(404, "not_found", "No such site endpoint.");

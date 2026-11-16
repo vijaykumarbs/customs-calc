@@ -28,60 +28,53 @@ function wireCopyButtons() {
   });
 }
 
-function wireSignup() {
-  const form = $("signupForm");
+function wireAccess() {
+  const form = $("accessForm");
   if (!form) return;
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const email = $("signupEmail").value.trim();
-    const status = $("signupStatus");
-    const button = $("signupBtn");
+    const email = $("accessEmail").value.trim();
+    const status = $("accessStatus");
+    const button = $("accessBtn");
 
     if (!email) {
       status.textContent = "Enter an email address first.";
-      $("signupEmail").focus();
+      $("accessEmail").focus();
       return;
     }
 
     button.disabled = true;
-    button.textContent = "Creating key…";
+    button.textContent = "Sending…";
     status.textContent = "";
 
     try {
-      const response = await fetch("/api/v1/signup", {
+      const response = await fetch("/api/site/notify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, source: "api" }),
       });
       const body = await response.json().catch(() => null);
 
       if (!response.ok) {
-        status.textContent = body?.error?.message || "Could not create a key. Try again.";
+        status.textContent =
+          body?.error?.message || "Could not add you to the list. Try again.";
         return;
       }
 
-      const key = body?.data?.key;
-      if (!key) {
-        status.textContent = "The server did not return a key. Try again.";
-        return;
-      }
-
-      $("keyValue").textContent = key;
-      $("keyResult").hidden = false;
-      form.hidden = true;
-      status.textContent = "";
-      toast("API key created");
+      button.textContent = "Request sent";
+      status.textContent =
+        body?.data?.message ||
+        "You're on the API early-access list. We'll email you when your key is ready.";
+      toast("Request received");
     } catch {
       status.textContent = "Could not reach the server. Check your connection and try again.";
     } finally {
-      button.disabled = false;
-      button.textContent = "Create my free API key";
+      if (button.textContent === "Sending…") {
+        button.disabled = false;
+        button.textContent = "Request API access";
+      }
     }
-  });
-
-  $("copyKey").addEventListener("click", () => {
-    copyText($("keyValue").textContent, "API key copied");
   });
 }
 
@@ -113,5 +106,5 @@ function wireNavHighlight() {
 
 $("year").textContent = String(new Date().getFullYear());
 wireCopyButtons();
-wireSignup();
+wireAccess();
 wireNavHighlight();

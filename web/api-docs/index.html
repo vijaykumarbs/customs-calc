@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="/assets/styles.css?v=4">
 </head>
 <body class="docs-body">
-  <a class="skip-link" href="#get-key">Skip to API key signup</a>
+  <a class="skip-link" href="#get-key">Skip to API access</a>
 
   <header class="site-header">
     <div class="wrap header-inner">
@@ -33,7 +33,7 @@
         <a href="#endpoints">Endpoints</a>
         <a href="#plans">Plans</a>
         <a href="#errors">Errors</a>
-        <a class="btn btn-primary btn-sm" href="#get-key">Get an API key</a>
+        <a class="btn btn-primary btn-sm" href="#get-key">Request API access</a>
       </nav>
     </div>
   </header>
@@ -63,23 +63,19 @@
         <aside class="key-card" id="get-key">
           <div class="key-card-head">
             <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-            <span class="key-card-file">create-key.sh</span>
+            <span class="key-card-file">request-access.sh</span>
           </div>
-          <form id="signupForm" class="key-form" novalidate>
-            <label class="field-label" for="signupEmail">Work email</label>
-            <input class="input" id="signupEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@company.com" required>
-            <button class="btn btn-primary btn-block" id="signupBtn" type="submit">Create my free API key</button>
+          <p class="key-card-lede">
+            Keys are issued by hand while verified signup is being built. Join the
+            early-access list and we will email you a free key with 10 billable calls a month.
+          </p>
+          <form id="accessForm" class="key-form" novalidate>
+            <label class="field-label" for="accessEmail">Work email</label>
+            <input class="input" id="accessEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@company.com" required>
+            <button class="btn btn-primary btn-block" id="accessBtn" type="submit">Request API access</button>
             <p class="hint">One key per email. The key is shown once and stored only as a SHA-256 hash.</p>
-            <p class="form-status" id="signupStatus" role="status" aria-live="polite"></p>
+            <p class="form-status" id="accessStatus" role="status" aria-live="polite"></p>
           </form>
-          <div class="key-result" id="keyResult" hidden>
-            <span class="key-result-label">Your API key — copy it now</span>
-            <div class="key-value">
-              <code id="keyValue"></code>
-              <button class="btn btn-outline btn-sm" id="copyKey" type="button">Copy</button>
-            </div>
-            <p class="hint">This is the only time the key is displayed. Keep it out of client-side code and public repositories.</p>
-          </div>
           <div class="key-card-foot">
             <span class="pill pill-good">No card required</span>
             <span class="pill">10 billable calls / month</span>
@@ -147,6 +143,11 @@ X-API-Key: cc_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
             <code>401 invalid_api_key</code>. A revoked key returns <code>403 key_disabled</code>.
             Keys are rate-limited per minute as well as monthly.
           </p>
+          <p>
+            Self-serve signup is closed while a verified email flow is being built.
+            Join the early-access list above and we will issue a free key by hand.
+            To rotate a lost key, reply to the email that carried it.
+          </p>
         </section>
 
         <section id="endpoints" class="docs-section">
@@ -164,8 +165,7 @@ X-API-Key: cc_live_xxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/search?q=</code></td><td>Free</td><td>Code + description only, no rates</td></tr>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/meta</code></td><td>Free</td><td>Dataset version, agreements and countries</td></tr>
                 <tr><td><span class="method get">GET</span></td><td><code>/api/v1/usage</code></td><td>Free</td><td>Current month's usage and reset date</td></tr>
-                <tr><td><span class="method post">POST</span></td><td><code>/api/v1/signup</code></td><td>Free</td><td>Create a key from an email address</td></tr>
-              </tbody>
+                              </tbody>
             </table>
           </div>
           <p class="docs-fine">Search results never include duty rates. Only a lookup or calculation returns rates and consumes quota.</p>

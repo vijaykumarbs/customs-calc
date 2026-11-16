@@ -465,6 +465,7 @@ test("the API root lists the batch endpoint", async () => {
   });
   assert.equal(response.status, 200);
   assert.ok(json.endpoints.includes("POST /api/v1/calculate/batch"));
+  assert.ok(!json.endpoints.some((endpoint) => endpoint.includes("/signup")));
 });
 
 test("admin token failures are throttled and the token comparison is not a plain string check", async () => {
@@ -659,23 +660,70 @@ test("cleanup deletes expired counters and rate-limit buckets", async () => {
   );
 });
 
-test("signup normalises plus aliases and the email column is unique", async () => {
+test("self-serve signup is closed and does not mint keys", async () => {
+  const env = makeEnv();
+  const countKeys = () =>
+    env.raw.prepare("SELECT COUNT(*) AS n FROM api_keys").get().n;
+
+  const result = await call(env, "/api/v1/signup", {
+    method: "POST",
+    body: { email: "closed+2@example.com" },
+    ip: "198.51.100.100",
+  });
+  assert.equal(result.response.status, 403);
+  assert.equal(result.json.error.code, "signup_closed");
+  assert.equal(countKeys(), 0);
+});
+
+test("the API early-access list normalises aliases and pins the source", async () => {
   const env = makeEnv();
 
-  const first = await call(env, "/api/v1/signup", {
+  const api = await call(env, "/api/site/notify", {
     method: "POST",
+    body: { email: "Case+2@Example.com", source: "api" },
+    ip: "198.51.100.101",
+  });
+  assert.equal(api.response.status, 201);
+  assert.match(api.json.data.message, /API early-access/);
+
+  const row = env.raw
+    .prepare("SELECT email, source FROM waitlist WHERE email = ?")
+    .get("case@example.com");
+  assert.equal(row.source, "api");
+
+  const pricing = await call(env, "/api/site/notify", {
+    method: "POST",
+    body: { email: "buyer@example.com", source: "arbitrary" },
+    ip: "198.51.100.102",
+  });
+  assert.equal(pricing.response.status, 201);
+  assert.equal(
+    env.raw.prepare("SELECT source FROM waitlist WHERE email = ?").get("buyer@example.com").source,
+    "pricing",
+  );
+});
+
+test("admin create normalises plus aliases and the email column is unique", async () => {
+  const env = makeEnv();
+  const headers = { "x-admin-token": ADMIN_TOKEN };
+
+  const first = await call(env, "/api/admin/create", {
+    method: "POST",
+    headers,
     body: { email: "Case+2@Example.com" },
-    ip: "198.51.100.100",
+    ip: "198.51.100.103",
   });
   assert.equal(first.response.status, 201);
   assert.equal(first.json.data.email, "case@example.com");
 
-  const second = await call(env, "/api/v1/signup", {
+  const second = await call(env, "/api/admin/create", {
     method: "POST",
+    headers,
     body: { email: "case+3@example.com" },
-    ip: "198.51.100.101",
+    ip: "198.51.100.103",
   });
   assert.equal(second.response.status, 409);
+  assert.equal(second.json.error.code, "email_registered");
 
   assert.throws(() => {
     env.raw
